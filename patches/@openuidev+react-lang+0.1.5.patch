@@ -1,0 +1,58 @@
+diff --git a/node_modules/@openuidev/react-lang/dist/Renderer.js b/node_modules/@openuidev/react-lang/dist/Renderer.js
+index b549447..43652f5 100644
+--- a/node_modules/@openuidev/react-lang/dist/Renderer.js
++++ b/node_modules/@openuidev/react-lang/dist/Renderer.js
+@@ -26,9 +26,22 @@ class ElementErrorBoundary extends Component {
+     componentDidUpdate(prevProps) {
+         if (!this.state.hasError) {
+             this.lastValidChildren = this.props.children;
++            this.recoveredNode = undefined;
+         }
+-        if (this.state.hasError && prevProps.children !== this.props.children) {
+-            this.setState({ hasError: false });
++        if (this.state.hasError) {
++            // Recover by comparing the underlying PARSED node, not the wrapper
++            // element identity (which changes every render). In React Native a
++            // child that throws persistently mid-stream would otherwise loop:
++            // recover -> re-render -> throw -> recover -> ... until React aborts
++            // with "Maximum update depth exceeded". Attempt recovery only when a
++            // genuinely new streaming delta arrives (node identity changes) and
++            // never retry the same node.
++            const node = this.props.children?.props?.el;
++            const prevNode = prevProps.children?.props?.el;
++            if (node !== prevNode && node !== this.recoveredNode) {
++                this.recoveredNode = node;
++                this.setState({ hasError: false });
++            }
+         }
+     }
+     componentDidCatch(error) {
+@@ -101,18 +114,7 @@ function ensureLoadingStyle() {
+     document.head.appendChild(style);
+ }
+ // ─── Public component ───
+-const DefaultQueryLoader = () => (_jsx("div", { style: {
+-        position: "absolute",
+-        top: 8,
+-        right: 8,
+-        width: 16,
+-        height: 16,
+-        border: "2px solid #e5e7eb",
+-        borderTopColor: "#3b82f6",
+-        borderRadius: "50%",
+-        animation: "openui-spin 0.6s linear infinite",
+-        zIndex: 10,
+-    } }));
++const DefaultQueryLoader = () => null;
+ export function Renderer({ response, library, isStreaming = false, onAction, onStateUpdate, initialState, onParseResult, toolProvider, queryLoader, onError, }) {
+     useInsertionEffect(() => {
+         ensureLoadingStyle();
+@@ -165,6 +167,6 @@ export function Renderer({ response, library, isStreaming = false, onAction, onS
+     if (!result?.root) {
+         return null;
+     }
+-    return (_jsx(OpenUIContext.Provider, { value: contextValue, children: _jsxs("div", { style: { position: "relative" }, children: [isQueryLoading && (queryLoader ?? _jsx(DefaultQueryLoader, {})), _jsx("div", { style: { opacity: isQueryLoading ? 0.7 : 1, transition: "opacity 0.2s ease" }, children: _jsx(RenderNode, { node: result.root }) })] }) }));
++    return (_jsx(OpenUIContext.Provider, { value: contextValue, children: _jsxs(Fragment, { children: [isQueryLoading && (queryLoader ?? _jsx(DefaultQueryLoader, {})), _jsx(Fragment, { children: _jsx(RenderNode, { node: result.root }) })] }) }));
+ }
+ //# sourceMappingURL=Renderer.js.map
+\ No newline at end of file
