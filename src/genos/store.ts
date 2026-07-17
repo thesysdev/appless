@@ -1,5 +1,7 @@
 import type { AppDef } from "./apps";
 import { APPS } from "./apps";
+import { GENOS_REQUEST_MAX } from "./safety/genosLink";
+import { redactFormState } from "./safety/redaction";
 import type { ChatMessage } from "./stream";
 import { streamScreen } from "./stream";
 
@@ -311,7 +313,10 @@ const deepLinkIndex = new Map<string, string>();
 
 /** Open a screen in another app via a genos://open deep link. */
 export function openDeepLink(appId: string, request: string): string {
-  const key = `${appId.toLowerCase()} ${request}`;
+  // Deep links are model output: cap the injected request here too, not only
+  // at the genos:// callsite, so any future caller gets the same bound.
+  const capped = request.slice(0, GENOS_REQUEST_MAX);
+  const key = `${appId.toLowerCase()} ${capped}`;
   const existing = deepLinkIndex.get(key);
   if (existing) {
     const screen = screenStore.get(existing);
@@ -325,7 +330,7 @@ export function openDeepLink(appId: string, request: string): string {
   const id = launchScreen({
     appId: app?.id ?? appId.toLowerCase(),
     appName: app?.name ?? appId.charAt(0).toUpperCase() + appId.slice(1),
-    request,
+    request: capped,
     speculative: false,
   });
   deepLinkIndex.set(key, id);
@@ -365,7 +370,9 @@ export function resolveAction(
   }
 
   const request = hasFormValues
-    ? `${message}\n\nSubmitted form values: ${JSON.stringify(formState)}`
+    ? // Credential-shaped field values are redacted before they leave the
+      // device - the request also replays as context on later screens.
+      `${message}\n\nSubmitted form values: ${JSON.stringify(redactFormState(formState))}`
     : message;
   const id = launchScreen({
     appId: parent?.appId ?? "unknown",

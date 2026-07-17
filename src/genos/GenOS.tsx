@@ -12,7 +12,6 @@ import {
   BackHandler,
   Easing,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -25,6 +24,8 @@ import { cerebrasKey } from "../config";
 import type { AppDef } from "./apps";
 import { APPS, DEFAULT_TILE, summonApp } from "./apps";
 import { genosLibrary } from "./library";
+import { capToastText, parseOpenLink } from "./safety/genosLink";
+import { openExternalUrl } from "./safety/urlPolicy";
 import { HomeScreen } from "./shell/HomeScreen";
 import { KeyGate } from "./shell/KeyGate";
 import { Switcher, type RunningApp } from "./shell/Switcher";
@@ -422,16 +423,17 @@ export default function GenOS() {
         const parsed = parseGenosUrl(url);
         if (parsed) {
           const { cmd, params } = parsed;
-          if (cmd === "toast") showToast(params.text || "Done ✓");
+          if (cmd === "toast") showToast(capToastText(params.text || "Done ✓"));
           else if (cmd === "open") {
-            if (params.app && params.request) deepLink(params.app, params.request);
+            const link = parseOpenLink(params);
+            if (link) deepLink(link.appId, link.request);
           } else if (cmd === "back") goBack();
           else if (cmd === "home") goHome();
         }
         return;
       }
       if (typeof url === "string" && url) {
-        Linking.openURL(url).catch(() => {});
+        openExternalUrl(url, () => showToast("That link type isn't supported"));
         return;
       }
       const message = ev.humanFriendlyMessage?.trim();
