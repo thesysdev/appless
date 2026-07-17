@@ -1,0 +1,8 @@
+root = Card([header, balance, tiles, chart, txs])
+header = CardHeader("Wallet", "Personal · ··4821")
+balance = HeroStat("$8,427.50", "AVAILABLE BALANCE", "+$1,204 vs last month")
+tiles = StatTiles([{label: "Spent", value: "$2,318", delta: "-12%", icon: "arrow-down-right"}, {label: "Saved", value: "$940", delta: "+8%", icon: "piggy-bank"}])
+chart = AreaChart(["Feb", "Mar", "Apr"], [spend], "natural")
+spend = Series("Spending", [2100, 1890, 2480])
+txs = ListBlock([t1])
+t1 = ListItem("Blue Tokai Coffee", "Today, 9:12 AM", "coffee", "-$6.40", Action([@ToAssistant("Open the transaction detail screen")]))

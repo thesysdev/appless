@@ -1,0 +1,7 @@
+root = Card([header, alert, map, stops])
+header = CardHeader("Dinner Tonight", "Sakura Sushi · 1.2 km away")
+alert = TextCallout("success", "Table confirmed", "Reservation for two at 7:00 PM, held for 15 minutes.")
+map = MapView("Sakura Sushi, Indiranagar, Bengaluru", 15)
+stops = ListBlock([walk, metro])
+walk = ListItem("Walk to metro", "6 min via 100 Feet Rd", "map-pin", "0.4 km")
+metro = ListItem("Green Line", "Towards Silk Institute", "tram", "4 stops", Action([@ToAssistant("Show the full route")]))

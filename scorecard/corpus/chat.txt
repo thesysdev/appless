@@ -1,0 +1,8 @@
+root = Card([header, thread, compose])
+header = CardHeader("Maya Chen", "mobile · active now")
+thread = Bubbles([{text: "Are we still on for dinner tonight?", me: false, time: "2:02 PM"}, {text: "Yes! Sakura Sushi at 7?", me: true}])
+compose = Form("reply", btns, [msg])
+msg = FormControl("Message", input)
+input = Input("text", "Message…")
+btns = Buttons([send])
+send = Button("Send", Action([@ToAssistant("Send the reply")]), "primary")
