@@ -48,6 +48,38 @@ export function loremflickrUrl({ q, seed, w, h }: ImgQuery): string {
   return `https://loremflickr.com/${w}/${h}/${keywords}?lock=${seed}`;
 }
 
+/**
+ * A non-semantic src is a URL the model made up: an outbound GET it fully
+ * controls, and a channel to smuggle conversation context to any host (the
+ * prompt-injection exfil path). Only https URLs on allowlisted image hosts
+ * resolve; anything else falls back to the keyless LoremFlickr path below.
+ */
+export const ALLOWED_IMAGE_HOSTS = new Set([
+  "images.unsplash.com",
+  "loremflickr.com",
+  "upload.wikimedia.org",
+]);
+
+/** Host of an absolute https URL, lowercased; null for anything else. */
+export function imageUrlHost(src: string): string | null {
+  const m = src.trim().match(/^https:\/\/([a-z0-9.-]+)(?::\d+)?(?:[/?#]|$)/i);
+  return m ? (m[1]?.toLowerCase() ?? null) : null;
+}
+
+/** True when a model-supplied URL points at an allowlisted https image host. */
+export function isAllowedImageUrl(src: string): boolean {
+  const host = imageUrlHost(src);
+  return host !== null && ALLOWED_IMAGE_HOSTS.has(host);
+}
+
+/** Blocked URLs resolve to this generic semantic image instead. */
+const FALLBACK_QUERY: ImgQuery = { q: "abstract gradient", seed: 1, w: 800, h: 500 };
+
+/** What a non-semantic src may load: the URL itself, or the safe fallback. */
+export function resolveExternalImageUrl(src: string): string {
+  return isAllowedImageUrl(src) ? src : loremflickrUrl(FALLBACK_QUERY);
+}
+
 /** query → Unsplash raw URLs; empty array = search failed, use LoremFlickr. */
 const unsplashCache = new Map<string, string[]>();
 const unsplashPending = new Map<string, Promise<void>>();
@@ -79,7 +111,8 @@ function ensureUnsplash(q: string): Promise<void> {
 }
 
 /**
- * Resolve a generated src to a loadable URL. Non-semantic srcs pass through.
+ * Resolve a generated src to a loadable URL. Non-semantic srcs go through the
+ * image-host policy (allowlisted hosts only, else the LoremFlickr fallback).
  * With an Unsplash key, returns undefined (placeholder) while the search is
  * in flight so the image doesn't double-load.
  */
@@ -107,7 +140,7 @@ export function useSemanticImage(src?: string): string | undefined {
   }, [q]);
 
   if (!src) return undefined;
-  if (!parsed) return src;
+  if (!parsed) return resolveExternalImageUrl(src);
   if (!q) return loremflickrUrl(parsed);
   const candidates = unsplashCache.get(parsed.q);
   if (candidates === undefined) return undefined; // still searching

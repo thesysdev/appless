@@ -60,6 +60,7 @@ export function KeyGate({ status }: { status: KeyStatus }) {
         placeholderTextColor={t.ink3}
         autoCapitalize="none"
         autoCorrect={false}
+        secureTextEntry
         onSubmitEditing={save}
         style={{
           width: "100%",
