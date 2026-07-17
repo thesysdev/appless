@@ -39,6 +39,18 @@ export const NEEDS_LIVE_DATA = "needs live data";
 /** Rounds that may end in tool calls before we force a plain generation. */
 const MAX_TOOL_ROUNDS = 3;
 
+/** A read gap longer than this mid-stream is treated as a stalled socket. */
+const STALL_TIMEOUT_MS = 20_000;
+
+/**
+ * Provider error bodies are raw JSON; flatten to one short line so provider
+ * internals never land verbatim in the error UI.
+ */
+function sanitizeDetail(raw: string): string {
+  const flat = raw.replace(/[{}\[\]"]/g, " ").replace(/\s+/g, " ").trim();
+  return flat.slice(0, 160);
+}
+
 interface StreamHandlers {
   onDelta: (text: string) => void;
   onDone: (info: StreamEndInfo) => void;
@@ -105,6 +117,56 @@ function createUtf8Decoder(): (chunk: Uint8Array) => string {
   };
 }
 
+/**
+ * One read with an inactivity watchdog. reader.read() never settles if the
+ * socket stalls without closing, so a byte gap longer than STALL_TIMEOUT_MS
+ * fails the round with a friendly stall error; a caller abort also settles
+ * the read even when the underlying socket ignores the signal. The timer is
+ * cleared on every settle path - no dangling handles.
+ */
+function readWithWatchdog(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal: AbortSignal | undefined,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  return new Promise((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const cleanup = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const fail = (err: Error) => {
+      cleanup();
+      reader.cancel().catch(() => {});
+      reject(err);
+    };
+    const onAbort = () => fail(new Error("aborted"));
+    timer = setTimeout(
+      () =>
+        fail(
+          new Error(
+            `stream stalled - no data for ${Math.round(STALL_TIMEOUT_MS / 1000)}s, try again`,
+          ),
+        ),
+      STALL_TIMEOUT_MS,
+    );
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+    reader.read().then(
+      (r) => {
+        cleanup();
+        resolve(r);
+      },
+      (err) => {
+        cleanup();
+        reject(err);
+      },
+    );
+  });
+}
+
 /** System prompt + optional tools section + today's date line. */
 function systemPrompt(): string {
   const today = new Date().toLocaleDateString("en-US", {
@@ -139,29 +201,41 @@ async function streamRound(
   const apiKey = cerebrasKey.get();
   if (!apiKey) throw new Error("No Cerebras API key set");
 
-  const res = await expoFetch(`${CEREBRAS_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: GENOS_MODEL,
-      messages: [{ role: "system", content: systemPrompt() }, ...convo],
-      ...(includeTools ? { tools: TOOL_DEFS } : {}),
-      stream: true,
-      temperature: 0.8,
-      max_completion_tokens: 3072,
-    }),
-    signal,
-  });
+  let res: Awaited<ReturnType<typeof expoFetch>>;
+  try {
+    res = await expoFetch(`${CEREBRAS_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: GENOS_MODEL,
+        messages: [{ role: "system", content: systemPrompt() }, ...convo],
+        ...(includeTools ? { tools: TOOL_DEFS } : {}),
+        stream: true,
+        temperature: 0.8,
+        max_completion_tokens: 3072,
+      }),
+      signal,
+    });
+  } catch (err) {
+    if (signal?.aborted || (err instanceof Error && err.name === "AbortError")) throw err;
+    throw new Error("network request failed - check the connection and try again");
+  }
   if (res.status === 401 || res.status === 403) {
     cerebrasKey.markRejected(apiKey);
     throw new Error("Cerebras rejected the API key - enter a valid key");
   }
+  if (res.status === 429) {
+    throw new Error("the AI provider is rate-limiting requests - wait a moment and try again");
+  }
+  if (res.status >= 500) {
+    throw new Error("the AI provider is unavailable right now - try again shortly");
+  }
   if (!res.ok || !res.body) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(detail.slice(0, 500) || `HTTP ${res.status}`);
+    const detail = sanitizeDetail(await res.text().catch(() => ""));
+    throw new Error(detail ? `request failed (HTTP ${res.status}): ${detail}` : `HTTP ${res.status}`);
   }
 
   const reader = res.body.getReader();
@@ -172,67 +246,72 @@ async function streamRound(
   let content = "";
   const toolCalls = new Map<number, ToolCall>();
 
+  const handleLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) return;
+    const payload = trimmed.slice(5).trim();
+    if (!payload) return;
+    if (payload === "[DONE]") {
+      sawDone = true;
+      return;
+    }
+
+    let chunk: {
+      error?: { message?: string } | string;
+      choices?: Array<{
+        delta?: {
+          content?: string;
+          tool_calls?: Array<{
+            index?: number;
+            id?: string;
+            function?: { name?: string; arguments?: string };
+          }>;
+        };
+        finish_reason?: string | null;
+      }>;
+    };
+    try {
+      chunk = JSON.parse(payload);
+    } catch {
+      return;
+    }
+    if (chunk.error) {
+      const msg = typeof chunk.error === "string" ? chunk.error : chunk.error.message;
+      throw new Error(sanitizeDetail(msg ?? "") || "stream error");
+    }
+    const choice = chunk.choices?.[0];
+    if (choice?.finish_reason) finishReason = choice.finish_reason;
+    const delta = choice?.delta;
+    if (delta?.content) {
+      content += delta.content;
+      onDelta(delta.content);
+    }
+    for (const tc of delta?.tool_calls ?? []) {
+      const idx = tc.index ?? 0;
+      const cur = toolCalls.get(idx) ?? {
+        id: "",
+        type: "function" as const,
+        function: { name: "", arguments: "" },
+      };
+      if (tc.id) cur.id = tc.id;
+      if (tc.function?.name) cur.function.name = tc.function.name;
+      if (tc.function?.arguments) cur.function.arguments += tc.function.arguments;
+      toolCalls.set(idx, cur);
+    }
+  };
+
   for (;;) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readWithWatchdog(reader, signal);
     if (done) break;
     buffer += decode(value);
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-      const payload = trimmed.slice(5).trim();
-      if (!payload) continue;
-      if (payload === "[DONE]") {
-        sawDone = true;
-        continue;
-      }
-
-      let chunk: {
-        error?: { message?: string } | string;
-        choices?: Array<{
-          delta?: {
-            content?: string;
-            tool_calls?: Array<{
-              index?: number;
-              id?: string;
-              function?: { name?: string; arguments?: string };
-            }>;
-          };
-          finish_reason?: string | null;
-        }>;
-      };
-      try {
-        chunk = JSON.parse(payload);
-      } catch {
-        continue;
-      }
-      if (chunk.error) {
-        const msg = typeof chunk.error === "string" ? chunk.error : chunk.error.message;
-        throw new Error(msg || "stream error");
-      }
-      const choice = chunk.choices?.[0];
-      if (choice?.finish_reason) finishReason = choice.finish_reason;
-      const delta = choice?.delta;
-      if (delta?.content) {
-        content += delta.content;
-        onDelta(delta.content);
-      }
-      for (const tc of delta?.tool_calls ?? []) {
-        const idx = tc.index ?? 0;
-        const cur = toolCalls.get(idx) ?? {
-          id: "",
-          type: "function" as const,
-          function: { name: "", arguments: "" },
-        };
-        if (tc.id) cur.id = tc.id;
-        if (tc.function?.name) cur.function.name = tc.function.name;
-        if (tc.function?.arguments) cur.function.arguments += tc.function.arguments;
-        toolCalls.set(idx, cur);
-      }
-    }
+    for (const line of lines) handleLine(line);
   }
+  // Providers should end lines, but a proxy that closes without a trailing
+  // newline must not lose the final event (often the finish_reason chunk).
+  if (buffer.trim()) handleLine(buffer);
 
   const dropped = !sawDone && !finishReason;
   if (dropped && !content && toolCalls.size === 0) {
