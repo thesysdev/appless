@@ -21,6 +21,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { cerebrasKey } from "../config";
+import { executeConfirmed } from "./actions/executor";
+import { classifyAction } from "./actions/model";
+import { receipts } from "./actions/receipts";
 import type { AppDef } from "./apps";
 import { APPS, DEFAULT_TILE, summonApp } from "./apps";
 import { genosLibrary } from "./library";
@@ -201,6 +204,12 @@ export default function GenOS() {
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; key: number } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** A consequential tap paused on the confirmation sheet. */
+  const [pendingAction, setPendingAction] = useState<{
+    message: string;
+    formState?: Record<string, unknown>;
+  } | null>(null);
 
   /** Apps the user has sent home - only these show as icons on the home screen. */
   const [minimizedIds, setMinimizedIds] = useState<string[]>([]);
@@ -461,10 +470,40 @@ export default function GenOS() {
         goBack();
         return;
       }
+      // Consequential taps (order/pay/send/delete-shaped) pause on the
+      // confirmation sheet; the action only runs from its Confirm button -
+      // never from prefetch or any speculative path.
+      if (classifyAction(message) === "consequential") {
+        setPendingAction({ message, formState: ev.formState });
+        return;
+      }
       pushScreen(activeApp, resolveAction(topId, message, ev.formState));
     },
     [topId, activeApp, generating, deepLink, goBack, goHome, showToast, pushScreen],
   );
+
+  /** Confirm: the executor runs + receipts the action, then the flow proceeds. */
+  const confirmPendingAction = useCallback(() => {
+    const pending = pendingAction;
+    setPendingAction(null);
+    if (!pending || !topId || !activeApp) return;
+    const note = executeConfirmed({ appId: activeApp, label: pending.message });
+    if (note) showToast(note);
+    pushScreen(activeApp, resolveAction(topId, pending.message, pending.formState));
+  }, [pendingAction, topId, activeApp, pushScreen, showToast]);
+
+  /** Decline: an honest declined receipt, and nothing else happens. */
+  const declinePendingAction = useCallback(() => {
+    const pending = pendingAction;
+    setPendingAction(null);
+    if (!pending || !activeApp) return;
+    receipts.record({
+      appId: activeApp,
+      label: pending.message,
+      tier: "consequential",
+      status: "declined",
+    });
+  }, [pendingAction, activeApp]);
 
   /** Android hardware back mirrors the shell's back gesture. */
   useEffect(() => {
@@ -775,6 +814,61 @@ export default function GenOS() {
           <Text style={{ color: "#fff", fontSize: 11.5, fontWeight: "600", letterSpacing: 0.4 }}>
             {top?.searching ? "searching the web…" : "materializing…"}
           </Text>
+        </View>
+      )}
+
+      {pendingAction && (
+        <View
+          style={{
+            position: "absolute",
+            bottom: insets.bottom + 34,
+            alignSelf: "center",
+            maxWidth: "86%",
+            padding: 16,
+            borderRadius: 20,
+            backgroundColor: t.chromeBg,
+            borderWidth: 1,
+            borderColor: t.chromeBorder,
+            gap: 10,
+            zIndex: 55,
+            shadowColor: "#000",
+            shadowOpacity: 0.18,
+            shadowRadius: 16,
+            shadowOffset: { width: 0, height: 8 },
+            elevation: 8,
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: "700", color: t.chromeInk }}>
+            {pendingAction.message}
+          </Text>
+          <Text style={{ fontSize: 13, color: t.chromeInk, opacity: 0.7 }}>
+            AppLess will simulate this action. Nothing real is charged or booked.
+          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10 }}>
+            <Pressable
+              onPress={declinePendingAction}
+              style={({ pressed }) => ({
+                paddingVertical: 8,
+                paddingHorizontal: 18,
+                borderRadius: 16,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ color: t.tint, fontSize: 14, fontWeight: "600" }}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              onPress={confirmPendingAction}
+              style={({ pressed }) => ({
+                paddingVertical: 8,
+                paddingHorizontal: 18,
+                borderRadius: 16,
+                backgroundColor: "#5e5ce6",
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Confirm</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 
