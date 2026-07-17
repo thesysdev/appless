@@ -40,7 +40,9 @@
     "postinstall": "patch-package",
     "generate:prompt": "node scripts/embed-prompt.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "check:drift": "node scripts/check-contract-drift.mjs",
+    "scorecard": "jest __tests__/scorecard.test.tsx"
   },
   "private": true,
   "license": "MIT",
