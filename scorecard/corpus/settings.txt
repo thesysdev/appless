@@ -1,0 +1,8 @@
+root = Card([header, connectivity, display])
+header = CardHeader("Settings")
+connectivity = ListBlock([wifi, bt], "CONNECTIVITY")
+wifi = ListItem("Wi-Fi", null, "wifi", "HomeNet", Action([@ToAssistant("Open the Wi-Fi settings screen")]))
+bt = ListItem("Bluetooth", null, "bluetooth", "On", Action([@ToAssistant("Open the Bluetooth settings screen")]))
+display = ListBlock([dark, bright], "DISPLAY")
+dark = Toggle("Dark Mode", true, "moon")
+bright = ListItem("Brightness", "Auto-adjusting", "sun", "68%", Action([@ToAssistant("Open the brightness screen")]))

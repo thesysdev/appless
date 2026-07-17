@@ -1,0 +1,4 @@
+root = Card([header, hero, grid])
+header = CardHeader("Kyoto in Autumn", "42 photos · November 2025")
+hero = ImageBlock("https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e", "Kiyomizu-dera at dusk")
+grid = PhotoGrid([{src: "https://images.unsplash.com/photo-1545569341-9eb8b30979d9", alt: "Torii gates"}, {src: "https://images.unsplash.com/photo-1493780474015-ba834fd0ce2f", alt: "Maple leaves"}, {src: "https://images.unsplash.com/photo-1528360983277-13d401cdc186", alt: "Bamboo grove"}])

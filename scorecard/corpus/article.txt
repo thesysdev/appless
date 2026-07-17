@@ -1,0 +1,5 @@
+root = Card([header, callout, body, facts])
+header = CardHeader("The Sunday Essay", "Reading time · 6 min")
+callout = TextCallout("info", "Editors' pick", "Selected by the features desk for weekend reading.")
+body = TextContent("Cities reorganize themselves around the schedules of their night workers. Long after the last train, bakeries fire their ovens and the wholesale markets begin to hum.", "default")
+facts = KVList([{label: "Author", value: "Lena Ortiz"}, {label: "Published", value: "Mar 2, 2026"}, {label: "Section", value: "Features"}], "ABOUT THIS PIECE")

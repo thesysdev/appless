@@ -1,0 +1,8 @@
+root = Card([header, steps, tiles, trend, splits, note])
+header = CardHeader("Training Week", "Mar 2 - 8, 2026")
+steps = HeroStat("12,480", "STEPS TODAY", "Goal 10,000 · 125%")
+tiles = StatTiles([{label: "Runs", value: "4", delta: "+1", icon: "running"}, {label: "Distance", value: "31.2 km", delta: "+8%", icon: "map-pin"}])
+trend = LineChart(["Mon", "Tue", "Wed", "Thu", "Fri"], [pace], "natural")
+pace = Series("Pace", [6.1, 5.8, 5.9, 5.6, 5.4])
+splits = KVList([{label: "Longest run", value: "12.4 km"}, {label: "Avg heart rate", value: "142 bpm"}, {label: "Elevation", value: "310 m"}], "WEEK TOTALS")
+note = TextCallout("warning", "Recovery day tomorrow", "Two hard sessions in a row - keep Friday easy.")
