@@ -2,7 +2,9 @@
  * Semantic image element shared by all design systems: resolves /api/img
  * queries via useSemanticImage, fades in on load, and shows a themed
  * placeholder while unresolved. Follows the createMapRenderer pattern -
- * design systems supply only their placeholder color.
+ * design systems supply only their placeholder color. Raw model-supplied
+ * URLs never reach <Image> directly: useSemanticImage filters them through
+ * the image-host policy in tools/images.ts first.
  */
 import React, { useState } from "react";
 import { Image, View } from "react-native";
