@@ -37,6 +37,7 @@ import { SvgXml } from "react-native-svg";
 import type { Suggestion } from "../apps";
 import { SUGGESTIONS } from "../apps";
 import { Text, TextInput, linearType } from "../typography";
+import { ProviderIcon } from "../ui/ProviderIcon";
 import { APPLESS_LOGO_XML } from "./applessLogo";
 import type { RunningApp } from "./Switcher";
 
@@ -250,7 +251,11 @@ function AppIcon({
             },
           ]}
         >
-          <TileIcon size={26} color="#fff" weight="fill" />
+          {app.providerId ? (
+            <ProviderIcon providerId={app.providerId} size={38} cornerRadius={9} />
+          ) : (
+            <TileIcon size={26} color="#fff" weight="fill" />
+          )}
         </View>
         {editing && (
           <Pressable

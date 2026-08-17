@@ -2,6 +2,7 @@ export interface AppDef {
   id: string;
   name: string;
   emoji: string;
+  providerId?: string;
   /** Gradient stops for the icon tile. */
   tile: [string, string];
   /** The request sent to the model to open the app's home screen. */

@@ -51,6 +51,7 @@ interface AppMeta {
   name: string;
   emoji: string;
   tile: [string, string];
+  providerId?: string;
 }
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -302,7 +303,12 @@ export default function GenOS() {
   const launch = useCallback(
     (app: AppDef) => {
       setNavAnim("launch");
-      rememberMeta(app.id, { name: app.name, emoji: app.emoji, tile: app.tile });
+      rememberMeta(app.id, {
+        name: app.name,
+        emoji: app.emoji,
+        tile: app.tile,
+        providerId: app.providerId,
+      });
       // openApp touches the screen store (which notifies subscribers), so it
       // must run here in the event handler - never inside a setState updater.
       if (!sessions[app.id]?.length) {
@@ -378,6 +384,7 @@ export default function GenOS() {
         name: known?.name ?? capitalize(appId),
         emoji: known?.emoji ?? "✨",
         tile: known?.tile ?? DEFAULT_TILE,
+        providerId: known?.providerId,
       });
       pushScreen(appId.toLowerCase(), id);
       activate(appId.toLowerCase());
@@ -546,6 +553,7 @@ export default function GenOS() {
           name: appMeta[id]?.name ?? capitalize(id),
           emoji: appMeta[id]?.emoji ?? "✨",
           tile: appMeta[id]?.tile ?? DEFAULT_TILE,
+          providerId: appMeta[id]?.providerId,
         })),
     [recentOrder, sessions, appMeta],
   );

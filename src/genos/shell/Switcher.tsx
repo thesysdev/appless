@@ -6,12 +6,14 @@ import { genosLibrary } from "../library";
 import { cleanLang, screenStore } from "../store";
 import { useCds } from "../theme";
 import { Text } from "../typography";
+import { ProviderIcon } from "../ui/ProviderIcon";
 
 export interface RunningApp {
   id: string;
   name: string;
   emoji: string;
   tile: [string, string];
+  providerId?: string;
 }
 
 const CARD_W = 188;
@@ -65,20 +67,24 @@ export function Switcher({
           return (
             <View key={app.id} style={{ gap: 8 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 7, width: CARD_W }}>
-                <LinearGradient
-                  colors={app.tile}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 6,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text style={{ fontSize: 12 }}>{app.emoji}</Text>
-                </LinearGradient>
+                {app.providerId ? (
+                  <ProviderIcon providerId={app.providerId} size={22} cornerRadius={6} />
+                ) : (
+                  <LinearGradient
+                    colors={app.tile}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 6,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ fontSize: 12 }}>{app.emoji}</Text>
+                  </LinearGradient>
+                )}
                 <Text
                   numberOfLines={1}
                   style={{ flex: 1, color: "#fff", fontSize: 12.5, fontWeight: "600" }}
@@ -136,7 +142,11 @@ export function Switcher({
                   </View>
                 ) : (
                   <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontSize: 64, opacity: 0.5 }}>{app.emoji}</Text>
+                    {app.providerId ? (
+                      <ProviderIcon providerId={app.providerId} size={64} cornerRadius={15} />
+                    ) : (
+                      <Text style={{ fontSize: 64, opacity: 0.5 }}>{app.emoji}</Text>
+                    )}
                   </View>
                 )}
               </Pressable>
