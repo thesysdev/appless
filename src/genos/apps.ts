@@ -7,6 +7,8 @@ export interface AppDef {
   tile: [string, string];
   /** The request sent to the model to open the app's home screen. */
   request: string;
+  /** Optional trusted runtime contract. Plan 004 will attach these to catalog entries. */
+  workflowId?: string;
 }
 
 export const DEFAULT_TILE: [string, string] = ["#5e5ce6", "#bf5af2"];

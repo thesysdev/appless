@@ -11,11 +11,11 @@ jest.mock("expo-secure-store", () => ({
 jest.mock("expo/fetch", () => ({ fetch: jest.fn() }));
 
 // Capture stream launches instead of hitting Cerebras.
-const streamCalls: Array<{ messages: unknown }> = [];
+const streamCalls: Array<{ messages: unknown; handlers?: Record<string, unknown> }> = [];
 jest.mock("../src/genos/stream", () => ({
   NEEDS_LIVE_DATA: "needs live data",
-  streamScreen: jest.fn((messages: unknown) => {
-    streamCalls.push({ messages });
+  streamScreen: jest.fn((messages: unknown, handlers?: Record<string, unknown>) => {
+    streamCalls.push({ messages, handlers });
   }),
 }));
 
@@ -23,10 +23,14 @@ import {
   cleanLang,
   extractActions,
   openApp,
+  openDeepLink,
   parseOsCommand,
   resolveAction,
+  retryScreen,
   screenStore,
+  setActiveScreen,
 } from "../src/genos/store";
+import { firecrawlKey } from "../src/genos/providers/firecrawl/key";
 
 describe("cleanLang", () => {
   it("strips a wrapping markdown fence", () => {
@@ -116,5 +120,58 @@ describe("resolveAction cache", () => {
     expect(retried?.status).toBe("pending");
     // A user-initiated retry is never speculative (re-enables tools).
     expect(retried?.speculative).toBe(false);
+  });
+});
+
+describe("trusted workflow context", () => {
+  const app = {
+    id: "research-test",
+    name: "Research",
+    emoji: "🔎",
+    tile: ["#000", "#111"] as [string, string],
+    request: "Research a market",
+    workflowId: "firecrawl-market-research",
+  };
+
+  beforeAll(async () => {
+    await firecrawlKey.set("fc-disposable-unit-test-only");
+  });
+
+  it("survives root, action child, form child, prefetch, and retry", () => {
+    const root = openApp(app);
+    expect(screenStore.get(root)?.workflowId).toBe(app.workflowId);
+    expect(streamCalls.at(-1)?.handlers?.workflowId).toBe(app.workflowId);
+
+    const child = resolveAction(root, "Compare vendors");
+    const form = resolveAction(root, "Run scoped report", { region: "US" });
+    const deep = openDeepLink("notes", "Save the sourced summary", app.workflowId);
+    expect(screenStore.get(child)?.workflowId).toBe(app.workflowId);
+    expect(screenStore.get(form)?.workflowId).toBe(app.workflowId);
+    expect(screenStore.get(deep)?.workflowId).toBe(app.workflowId);
+
+    screenStore.patch(root, {
+      status: "done",
+      content: 'root = Button("More", Action([@ToAssistant("Open evidence")]))',
+    });
+    setActiveScreen(root);
+    const prefetched = screenStore.all().find((screen) => screen.parentId === root && screen.speculative);
+    expect(prefetched?.workflowId).toBe(app.workflowId);
+
+    const callsBefore = streamCalls.length;
+    retryScreen(child);
+    expect(screenStore.get(child)?.workflowId).toBe(app.workflowId);
+    expect(streamCalls).toHaveLength(callsBefore + 1);
+    expect(streamCalls.at(-1)?.handlers?.workflowId).toBe(app.workflowId);
+  });
+
+  it("does not execute any tool round during speculative prefetch", () => {
+    const root = openApp({ ...app, id: "prefetch-safety-test" });
+    screenStore.patch(root, {
+      status: "done",
+      content: 'root = Button("Paid", Action([@ToAssistant("Run paid research")]))',
+    });
+    setActiveScreen(root);
+    const handler = streamCalls.at(-1)?.handlers?.onToolRound as (() => string) | undefined;
+    expect(handler?.()).toBe("abort");
   });
 });

@@ -2,6 +2,8 @@ import type { AppDef } from "./apps";
 import { APPS } from "./apps";
 import type { ChatMessage } from "./stream";
 import { streamScreen } from "./stream";
+import { firecrawlKey } from "./providers/firecrawl/key";
+import { isFirecrawlWorkflow } from "./workflows";
 
 export type ScreenStatus = "pending" | "streaming" | "done" | "error";
 
@@ -12,6 +14,8 @@ export interface Screen {
   /** The user-intent message that produced this screen. */
   request: string;
   parentId?: string;
+  /** Trusted provider workflow inherited by every descendant screen. */
+  workflowId?: string;
   /** Accumulating openui-lang source. */
   content: string;
   status: ScreenStatus;
@@ -30,6 +34,7 @@ export interface Screen {
   osCommand?: { cmd: "back" | "home" | "switcher" | "open"; arg?: string };
   /** The model is running tools (web_search) before composing the screen. */
   searching?: boolean;
+  toolProgress?: { state: "starting" | "processing"; elapsedMs: number; jobId?: string };
 }
 
 /** Detect a whole-response @OS(...) command (nothing else in the reply). */
@@ -97,7 +102,13 @@ class ScreenStore {
     // Content is updated synchronously so get()/onDone always see the latest;
     // only the subscriber notification is throttled. Content flowing also
     // means any tool round is over - flip the "searching" pill back.
-    this.screens.set(id, { ...s, content: s.content + delta, status: "streaming", searching: false });
+    this.screens.set(id, {
+      ...s,
+      content: s.content + delta,
+      status: "streaming",
+      searching: false,
+      toolProgress: undefined,
+    });
     this.scheduleFlush();
   }
 
@@ -205,6 +216,7 @@ function startStream(id: string) {
 
   streamScreen(buildMessages(screen), {
     signal: controller.signal,
+    workflowId: screen.workflowId,
     onDelta: (delta) => {
       if (!stale()) screenStore.append(id, delta);
     },
@@ -218,6 +230,9 @@ function startStream(id: string) {
       screenStore.patch(id, { content: "", status: "pending", searching: true });
       return "continue";
     },
+    onToolProgress: (toolProgress) => {
+      if (!stale()) screenStore.patch(id, { searching: true, toolProgress });
+    },
     onDone: (info) => {
       if (stale()) return;
       inflight.delete(id);
@@ -229,6 +244,7 @@ function startStream(id: string) {
           status: "error",
           error: "The connection dropped mid-screen - retry",
           searching: false,
+          toolProgress: undefined,
         });
         return;
       }
@@ -240,13 +256,19 @@ function startStream(id: string) {
         truncated: info.truncated,
         osCommand,
         searching: false,
+        toolProgress: undefined,
       });
       if (!osCommand) maybePrefetch(id);
     },
     onError: (err) => {
       if (stale()) return;
       inflight.delete(id);
-      screenStore.patch(id, { status: "error", error: err.message, searching: false });
+      screenStore.patch(id, {
+        status: "error",
+        error: err.message,
+        searching: false,
+        toolProgress: undefined,
+      });
     },
   });
 }
@@ -256,6 +278,7 @@ interface LaunchInput {
   appName: string;
   request: string;
   parentId?: string;
+  workflowId?: string;
   speculative: boolean;
 }
 
@@ -268,7 +291,9 @@ function launchScreen(input: LaunchInput): string {
     status: "pending",
     startedAt: performance.now(),
   });
-  startStream(id);
+  // A Firecrawl workflow waits for its provider-scoped gate. Ordinary apps
+  // continue to launch even when no Firecrawl credential exists.
+  if (!isFirecrawlWorkflow(input.workflowId) || firecrawlKey.get()) startStream(id);
   return id;
 }
 
@@ -300,6 +325,7 @@ export function openApp(app: AppDef): string {
     appId: app.id,
     appName: app.name,
     request: app.request,
+    workflowId: app.workflowId,
     speculative: false,
   });
   appHomeIndex.set(app.id, id);
@@ -310,8 +336,8 @@ export function openApp(app: AppDef): string {
 const deepLinkIndex = new Map<string, string>();
 
 /** Open a screen in another app via a genos://open deep link. */
-export function openDeepLink(appId: string, request: string): string {
-  const key = `${appId.toLowerCase()} ${request}`;
+export function openDeepLink(appId: string, request: string, parentWorkflowId?: string): string {
+  const key = `${appId.toLowerCase()} ${parentWorkflowId ?? ""} ${request}`;
   const existing = deepLinkIndex.get(key);
   if (existing) {
     const screen = screenStore.get(existing);
@@ -326,6 +352,7 @@ export function openDeepLink(appId: string, request: string): string {
     appId: app?.id ?? appId.toLowerCase(),
     appName: app?.name ?? appId.charAt(0).toUpperCase() + appId.slice(1),
     request,
+    workflowId: parentWorkflowId ?? app?.workflowId,
     speculative: false,
   });
   deepLinkIndex.set(key, id);
@@ -372,6 +399,7 @@ export function resolveAction(
     appName: parent?.appName ?? "App",
     request,
     parentId,
+    workflowId: parent?.workflowId,
     speculative: false,
   });
   if (!hasFormValues) actionIndex.set(key, id);
@@ -394,6 +422,7 @@ export function retryScreen(id: string) {
     // tools for prefetched screens that errored with NEEDS_LIVE_DATA.
     speculative: false,
     searching: false,
+    toolProgress: undefined,
   });
   startStream(id);
 }
@@ -421,9 +450,9 @@ function maybePrefetch(id: string) {
       appName: screen.appName,
       request: message,
       parentId: id,
+      workflowId: screen.workflowId,
       speculative: true,
     });
     actionIndex.set(key, childId);
   }
 }
-

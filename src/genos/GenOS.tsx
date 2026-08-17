@@ -21,11 +21,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { cerebrasKey } from "../config";
+import { firecrawlKey } from "./providers/firecrawl/key";
 import type { AppDef } from "./apps";
 import { APPS, DEFAULT_TILE, summonApp } from "./apps";
 import { genosLibrary } from "./library";
 import { HomeScreen } from "./shell/HomeScreen";
 import { KeyGate } from "./shell/KeyGate";
+import { ProviderKeyGate } from "./shell/ProviderKeyGate";
 import { Switcher, type RunningApp } from "./shell/Switcher";
 import {
   cleanLang,
@@ -39,6 +41,7 @@ import {
 import { useCds } from "./theme";
 import { Text } from "./typography";
 import { AppsIcon, LucideIcon } from "./ui/icons";
+import { isFirecrawlWorkflow } from "./workflows";
 
 /** Shape of the ActionEvent the Renderer dispatches (subset we use). */
 interface GenActionEvent {
@@ -188,6 +191,7 @@ function Skeleton() {
 export default function GenOS() {
   useSyncExternalStore(screenStore.subscribe, screenStore.getVersion);
   const keyStatus = useSyncExternalStore(cerebrasKey.subscribe, cerebrasKey.getStatus);
+  const firecrawlKeyStatus = useSyncExternalStore(firecrawlKey.subscribe, firecrawlKey.getStatus);
 
   const t = useCds();
   const insets = useSafeAreaInsets();
@@ -200,6 +204,7 @@ export default function GenOS() {
   const [appMeta, setAppMeta] = useState<Record<string, AppMeta>>({});
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; key: number } | null>(null);
+  const [dismissedProviderGate, setDismissedProviderGate] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Apps the user has sent home - only these show as icons on the home screen. */
@@ -378,7 +383,7 @@ export default function GenOS() {
   /** genos://open deep link - jump into another app at a specific screen. */
   const deepLink = useCallback(
     (appId: string, request: string) => {
-      const id = openDeepLink(appId, request);
+      const id = openDeepLink(appId, request, top?.workflowId);
       const known = APPS.find((a) => a.id === appId.toLowerCase());
       rememberMeta(appId.toLowerCase(), {
         name: known?.name ?? capitalize(appId),
@@ -389,7 +394,7 @@ export default function GenOS() {
       pushScreen(appId.toLowerCase(), id);
       activate(appId.toLowerCase());
     },
-    [activate, rememberMeta, pushScreen],
+    [activate, rememberMeta, pushScreen, top?.workflowId],
   );
 
   /**
@@ -779,7 +784,13 @@ export default function GenOS() {
         >
           <PulsingDot />
           <Text style={{ color: "#fff", fontSize: 11.5, fontWeight: "600", letterSpacing: 0.4 }}>
-            {top?.searching ? "searching the web…" : "materializing…"}
+            {top?.toolProgress?.state === "starting"
+              ? "starting Firecrawl agent…"
+              : top?.toolProgress?.state === "processing"
+                ? `Firecrawl working… ${Math.floor(top.toolProgress.elapsedMs / 1000)}s`
+                : top?.searching
+                  ? "searching the web…"
+                  : "materializing…"}
           </Text>
         </View>
       )}
@@ -822,6 +833,20 @@ export default function GenOS() {
           onDismiss={() => setSwitcherOpen(false)}
         />
       )}
+
+      {topId &&
+        isFirecrawlWorkflow(top?.workflowId) &&
+        (firecrawlKeyStatus === "missing" || firecrawlKeyStatus === "rejected") &&
+        dismissedProviderGate !== topId && (
+          <ProviderKeyGate
+            status={firecrawlKeyStatus}
+            onDismiss={() => setDismissedProviderGate(topId)}
+            onConnected={() => {
+              setDismissedProviderGate(null);
+              retryScreen(topId);
+            }}
+          />
+        )}
 
       {(keyStatus === "missing" || keyStatus === "rejected") && <KeyGate status={keyStatus} />}
     </KeyboardAvoidingView>

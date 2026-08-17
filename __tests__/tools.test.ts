@@ -10,6 +10,7 @@ jest.mock("expo/fetch", () => ({ fetch: jest.fn() }));
 
 import { loremflickrUrl, parseImgUrl } from "../src/genos/tools/images";
 import { executeTool, formatWebResults } from "../src/genos/tools/search";
+import { definitionsForProviders } from "../src/genos/tools";
 
 describe("semantic image queries (/api/img)", () => {
   it("parses the prompt's canonical form", () => {
@@ -66,5 +67,35 @@ describe("web_search tool", () => {
     expect(block).toContain("1. Result - example.com (2026-07-14)");
     expect(block).toContain("Snippet text");
     expect(formatWebResults("test", [])).toContain("none found");
+  });
+});
+
+describe("provider-scoped tool registry", () => {
+  const names = (exa: boolean, firecrawl: boolean) =>
+    definitionsForProviders({ exa, firecrawl }).map((tool) => tool.function.name);
+
+  it("composes no keys, Exa only, Firecrawl only, and both providers", () => {
+    expect(names(false, false)).toEqual([]);
+    expect(names(true, false)).toEqual(["web_search"]);
+    expect(names(false, true)).toEqual([
+      "firecrawl_search",
+      "firecrawl_scrape",
+      "firecrawl_agent",
+    ]);
+    expect(names(true, true)).toEqual([
+      "web_search",
+      "firecrawl_search",
+      "firecrawl_scrape",
+      "firecrawl_agent",
+    ]);
+  });
+
+  it("never exposes maxCredits or arbitrary schema as model-controlled Agent arguments", () => {
+    const agent = definitionsForProviders({ exa: false, firecrawl: true }).find(
+      (tool) => tool.function.name === "firecrawl_agent",
+    );
+    const properties = agent?.function.parameters.properties as Record<string, unknown>;
+    expect(properties.maxCredits).toBeUndefined();
+    expect(properties.schema).toBeUndefined();
   });
 });
