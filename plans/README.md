@@ -10,7 +10,7 @@ when done.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | Finish and verify Linear-style global typography | P1 | S | - | TODO |
+| 001 | Finish and verify Linear-style global typography | P1 | S | - | DONE |
 | 002 | Add Raycast-compatible provider favicons | P1 | S | - | TODO |
 | 003 | Add the Firecrawl provider runtime | P1 | L | - | TODO |
 | 004 | Add the Firecrawl slash-command catalog and menu | P1 | M | 002, 003 | TODO |
@@ -66,4 +66,3 @@ REJECTED (with one-line rationale)
 - Put a shared Firecrawl key in `EXPO_PUBLIC_FIRECRAWL_API_KEY`: rejected for
   production because Expo public variables are bundled into the client. The app
   remains BYOK and stores the user's key on-device.
-
