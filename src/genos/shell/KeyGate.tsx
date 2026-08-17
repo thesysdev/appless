@@ -5,9 +5,10 @@
  * API rejects the stored key.
  */
 import React, { useState } from "react";
-import { Linking, Pressable, Text, TextInput, View } from "react-native";
+import { Linking, Pressable, View } from "react-native";
 import { cerebrasKey, type KeyStatus } from "../../config";
 import { useCds } from "../theme";
+import { Text, TextInput, linearType } from "../typography";
 
 const ACCENT = "#5e5ce6";
 
@@ -39,7 +40,7 @@ export function KeyGate({ status }: { status: KeyStatus }) {
         gap: 14,
       }}
     >
-      <Text style={{ fontSize: 30, fontWeight: "800", color: t.ink, letterSpacing: -0.5 }}>
+      <Text style={{ color: t.ink, ...linearType.headline }}>
         AppLess
       </Text>
       <Text style={{ fontSize: 14, color: t.ink2, textAlign: "center", maxWidth: 320 }}>

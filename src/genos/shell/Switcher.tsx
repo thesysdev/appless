@@ -1,10 +1,11 @@
 import { Renderer } from "@openuidev/react-lang";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { genosLibrary } from "../library";
 import { cleanLang, screenStore } from "../store";
 import { useCds } from "../theme";
+import { Text } from "../typography";
 
 export interface RunningApp {
   id: string;

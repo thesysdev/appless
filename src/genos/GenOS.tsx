@@ -16,7 +16,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -38,6 +37,7 @@ import {
   setActiveScreen,
 } from "./store";
 import { useCds } from "./theme";
+import { Text } from "./typography";
 import { AppsIcon, LucideIcon } from "./ui/icons";
 
 /** Shape of the ActionEvent the Renderer dispatches (subset we use). */

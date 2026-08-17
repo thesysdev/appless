@@ -5,7 +5,8 @@
 import { useTriggerAction } from "@openuidev/react-lang";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Text, linearType } from "../../typography";
 import { useTap } from "../shared/actions";
 import { createImg } from "../shared/media";
 import type {
@@ -65,9 +66,7 @@ export const CardHeader: Renderer<CardHeaderProps> = ({ props }) => {
         <Text
           style={{
             marginBottom: 1,
-            fontSize: 12,
-            fontWeight: "600",
-            letterSpacing: 0.6,
+            ...linearType.eyebrow,
             textTransform: "uppercase",
             color: t.ink2,
           }}
@@ -77,10 +76,7 @@ export const CardHeader: Renderer<CardHeaderProps> = ({ props }) => {
       )}
       <Text
         style={{
-          fontSize: 56,
-          fontWeight: "300",
-          letterSpacing: -1.5,
-          lineHeight: 60,
+          ...linearType.displayLarge,
           color: t.ink,
         }}
       >
@@ -91,15 +87,12 @@ export const CardHeader: Renderer<CardHeaderProps> = ({ props }) => {
 };
 
 const TEXT_STYLES = {
-  small: { fontSize: 12.5, lineHeight: 18 },
-  default: { fontSize: 15, lineHeight: 22 },
-  large: { fontSize: 17, lineHeight: 24 },
-  "small-heavy": { fontSize: 13, lineHeight: 19, fontWeight: "600" as const },
+  small: linearType.caption,
+  default: linearType.body,
+  large: linearType.bodyLarge,
+  "small-heavy": linearType.button,
   "large-heavy": {
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: "700" as const,
-    letterSpacing: -0.3,
+    ...linearType.cardTitle,
     marginBottom: -6,
   },
 };

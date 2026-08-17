@@ -5,7 +5,8 @@
 import { useTriggerAction } from "@openuidev/react-lang";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
-import { Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { Pressable, ScrollView, Switch, View } from "react-native";
+import { Text, linearType } from "../../typography";
 import { useTap } from "../shared/actions";
 import { createImg } from "../shared/media";
 import type {
@@ -63,16 +64,14 @@ export const CardHeader: Renderer<CardHeaderProps> = ({ props }) => {
         <Text
           style={{
             marginBottom: 2,
-            fontSize: 12,
-            fontWeight: "500",
-            letterSpacing: 0.5,
+            ...linearType.eyebrow,
             color: t.primary,
           }}
         >
           {props.subtitle}
         </Text>
       )}
-      <Text style={{ fontSize: 28, fontWeight: "400", lineHeight: 36, color: t.onSurface }}>
+      <Text style={{ color: t.onSurface, ...linearType.headline }}>
         {props.title}
       </Text>
     </View>
@@ -80,14 +79,12 @@ export const CardHeader: Renderer<CardHeaderProps> = ({ props }) => {
 };
 
 const TEXT_STYLES = {
-  small: { fontSize: 12.5, lineHeight: 18 },
-  default: { fontSize: 15, lineHeight: 22 },
-  large: { fontSize: 17, lineHeight: 24 },
-  "small-heavy": { fontSize: 13, lineHeight: 19, fontWeight: "500" as const },
+  small: linearType.caption,
+  default: linearType.body,
+  large: linearType.bodyLarge,
+  "small-heavy": linearType.button,
   "large-heavy": {
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: "500" as const,
+    ...linearType.cardTitle,
     marginBottom: -6,
   },
 };

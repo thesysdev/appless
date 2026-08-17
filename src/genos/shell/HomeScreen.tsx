@@ -31,13 +31,12 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
-  TextInput,
   View,
 } from "react-native";
 import { SvgXml } from "react-native-svg";
 import type { Suggestion } from "../apps";
 import { SUGGESTIONS } from "../apps";
+import { Text, TextInput, linearType } from "../typography";
 import { APPLESS_LOGO_XML } from "./applessLogo";
 import type { RunningApp } from "./Switcher";
 
@@ -117,7 +116,7 @@ function SuggestionRow({
         style={{ flexDirection: "row", alignItems: "center", gap: 10, opacity: fade }}
       >
         <IconCmp size={18} color="rgba(255,255,255,0.85)" weight="regular" />
-        <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 15, fontWeight: "400" }}>
+        <Text style={{ color: "rgba(255,255,255,0.85)", ...linearType.bodySmall }}>
           {shown}
         </Text>
       </Animated.View>
@@ -387,10 +386,7 @@ export const HomeScreen = React.memo(function HomeScreen({
           style={{
             marginTop: 4,
             textAlign: "center",
-            fontSize: 24,
-            fontWeight: "400",
-            letterSpacing: -0.5,
-            lineHeight: 30,
+            ...linearType.cardTitle,
             color: "rgba(255,255,255,0.5)",
             textShadowColor: "rgba(0,0,0,0.35)",
             textShadowRadius: 18,
