@@ -7,7 +7,8 @@ import { FormNameContext, useFormName, useTriggerAction } from "@openuidev/react
 import type { ActionPlan } from "@openuidev/react-lang";
 import RNSlider from "@react-native-community/slider";
 import React, { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { Text, TextInput } from "../../typography";
 import { readSelectItems, textInputBehaviorProps, useFieldState } from "../shared/forms";
 import type {
   ButtonProps,

@@ -4,7 +4,8 @@
  * its own colors. Signatures/schemas live in ../contract.tsx.
  */
 import React, { useState } from "react";
-import { Text as RNText, View } from "react-native";
+import { View } from "react-native";
+import { Text as RNText } from "../../typography";
 import Svg, { Circle, G, Path, Rect, Text as SvgText } from "react-native-svg";
 import type { CartesianChartProps, GenosRenderers, PieChartProps, Renderer } from "../contract";
 

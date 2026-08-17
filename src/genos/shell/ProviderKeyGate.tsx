@@ -1,18 +1,18 @@
-/**
- * First-launch gate: applessOS is BYOK - screens generate on the user's own
- * Cerebras key, entered once and stored on-device (SecureStore on iOS/
- * Android, localStorage on web). Shown until a key exists; reappears if the
- * API rejects the stored key.
- */
 import React, { useState } from "react";
 import { Linking, Pressable, View } from "react-native";
-import { cerebrasKey, type KeyStatus } from "../../config";
+import { firecrawlKey, type FirecrawlKeyStatus } from "../providers/firecrawl/key";
 import { useCds } from "../theme";
 import { Text, TextInput, linearType } from "../typography";
 
-const ACCENT = "#5e5ce6";
-
-export function KeyGate({ status }: { status: KeyStatus }) {
+export function ProviderKeyGate({
+  status,
+  onDismiss,
+  onConnected,
+}: {
+  status: FirecrawlKeyStatus;
+  onDismiss: () => void;
+  onConnected: () => void;
+}) {
   const t = useCds();
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
@@ -21,18 +21,17 @@ export function KeyGate({ status }: { status: KeyStatus }) {
   const save = async () => {
     if (!valid || saving) return;
     setSaving(true);
-    await cerebrasKey.set(value);
+    await firecrawlKey.set(value);
+    setSaving(false);
+    onConnected();
   };
 
   return (
     <View
       style={{
         position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 100,
+        inset: 0,
+        zIndex: 90,
         backgroundColor: t.bg,
         alignItems: "center",
         justifyContent: "center",
@@ -40,24 +39,20 @@ export function KeyGate({ status }: { status: KeyStatus }) {
         gap: 14,
       }}
     >
-      <Text style={{ color: t.ink, ...linearType.headline }}>
-        AppLess
+      <Text style={{ color: t.ink, ...linearType.headline }}>Connect Firecrawl</Text>
+      <Text style={{ fontSize: 14, color: t.ink2, textAlign: "center", maxWidth: 360 }}>
+        This action uses your Firecrawl credits. Your key is stored only on this device and sent
+        directly to Firecrawl.
       </Text>
-      <Text style={{ fontSize: 14, color: t.ink2, textAlign: "center", maxWidth: 320 }}>
-        Every screen is generated the moment you ask - on your own Cerebras API key. It is
-        stored only on this device.
-      </Text>
-
       {status === "rejected" && (
         <Text style={{ fontSize: 13, color: t.red, textAlign: "center" }}>
-          Cerebras rejected the saved key - paste a valid one.
+          Firecrawl rejected the saved key. Enter a current key.
         </Text>
       )}
-
       <TextInput
         value={value}
         onChangeText={setValue}
-        placeholder="csk-…"
+        placeholder="fc-…"
         placeholderTextColor={t.ink3}
         autoCapitalize="none"
         autoCorrect={false}
@@ -75,25 +70,26 @@ export function KeyGate({ status }: { status: KeyStatus }) {
           color: t.ink,
         }}
       />
-
       <Pressable
         onPress={save}
         disabled={!valid || saving}
         style={({ pressed }) => ({
           paddingVertical: 12,
-          paddingHorizontal: 36,
+          paddingHorizontal: 34,
           borderRadius: 22,
-          backgroundColor: ACCENT,
+          backgroundColor: "#5e5ce6",
           opacity: !valid || saving ? 0.4 : pressed ? 0.8 : 1,
         })}
       >
         <Text style={{ color: "#fff", fontSize: 15, fontWeight: "600" }}>
-          {saving ? "Starting…" : "Start"}
+          {saving ? "Saving…" : "Use Firecrawl"}
         </Text>
       </Pressable>
-
-      <Pressable onPress={() => Linking.openURL("https://cloud.cerebras.ai").catch(() => {})}>
-        <Text style={{ fontSize: 13, color: t.tint }}>Get a free key at cloud.cerebras.ai</Text>
+      <Pressable onPress={() => Linking.openURL("https://www.firecrawl.dev/app/api-keys").catch(() => {})}>
+        <Text style={{ color: t.tint, fontSize: 13 }}>Get a key from Firecrawl</Text>
+      </Pressable>
+      <Pressable accessibilityLabel="Dismiss Firecrawl key prompt" onPress={onDismiss}>
+        <Text style={{ color: t.ink2, fontSize: 13 }}>Not now</Text>
       </Pressable>
     </View>
   );
