@@ -28,17 +28,26 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   ImageBackground,
+  type NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
+  TextInput as NativeTextInput,
+  type TextInputKeyPressEventData,
   View,
 } from "react-native";
 import { SvgXml } from "react-native-svg";
 import type { Suggestion } from "../apps";
 import { SUGGESTIONS } from "../apps";
+import {
+  commandAvailability,
+  filterSlashCommands,
+  parseSlashCommand,
+} from "../commands";
 import { Text, TextInput, linearType } from "../typography";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { APPLESS_LOGO_XML } from "./applessLogo";
+import { CommandMenu, moveCommandSelection } from "./CommandMenu";
 import type { RunningApp } from "./Switcher";
 
 const SUGGESTION_ICONS: Record<string, Icon> = {
@@ -311,6 +320,7 @@ export const HomeScreen = React.memo(function HomeScreen({
   runningApps,
   onResume,
   onClose,
+  hasFirecrawlKey,
 }: {
   topInset: number;
   /** True while an app screen is rendered over the home screen. */
@@ -319,6 +329,7 @@ export const HomeScreen = React.memo(function HomeScreen({
   runningApps: RunningApp[];
   onResume: (appId: string) => void;
   onClose: (appId: string) => void;
+  hasFirecrawlKey: boolean;
 }) {
   const [ask, setAsk] = useState("");
   const [slots, setSlots] = useState<number[]>([0, 1, 2]);
@@ -326,6 +337,10 @@ export const HomeScreen = React.memo(function HomeScreen({
   const [editingId, setEditingId] = useState<string | null>(null);
   const nextIdx = useRef(3);
   const turn = useRef(0);
+  const inputRef = useRef<NativeTextInput>(null);
+  const [highlightedCommand, setHighlightedCommand] = useState(0);
+  const menuOpen = ask.startsWith("/");
+  const filteredCommands = filterSlashCommands(ask);
 
   // Every 4s swap out one suggestion (cycling through the rows in order).
   // Paused while covered - no point animating under an app screen. The refs
@@ -347,10 +362,34 @@ export const HomeScreen = React.memo(function HomeScreen({
   const visible: Suggestion[] = slots.map((i) => SUGGESTIONS[i]);
 
   const submit = () => {
-    const text = ask.trim();
+    const text = ask;
     if (!text) return;
+    const parsed = parseSlashCommand(text);
+    if (menuOpen && parsed.kind !== "known" && filteredCommands[highlightedCommand]) {
+      const command = filteredCommands[highlightedCommand];
+      if (commandAvailability(command, hasFirecrawlKey) === "needs-key") {
+        onCommand(`/${command.id}`);
+        setAsk("");
+      } else {
+        setAsk(`/${command.id} `);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      }
+      return;
+    }
     onCommand(text);
     setAsk("");
+  };
+
+  const handleKeyPress = (event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+    if (!menuOpen) return;
+    const key = event.nativeEvent.key;
+    if (key === "ArrowDown" || key === "ArrowUp") {
+      event.preventDefault?.();
+      setHighlightedCommand((current) => moveCommandSelection(current, key === "ArrowDown" ? 1 : -1, filteredCommands.length));
+    } else if (key === "Escape") {
+      event.preventDefault?.();
+      setAsk("");
+    }
   };
 
   return (
@@ -434,16 +473,41 @@ export const HomeScreen = React.memo(function HomeScreen({
       </View>
 
       <View style={{ gap: 12, paddingHorizontal: 18 }}>
-        <View style={{ gap: 22, paddingVertical: 10, paddingLeft: 10 }}>
-          {visible.map((s, i) => (
-            <SuggestionRow key={i} s={s} covered={covered} onPress={() => onCommand(s.command)} />
-          ))}
-        </View>
+        {!menuOpen && (
+          <View style={{ gap: 22, paddingVertical: 10, paddingLeft: 10 }}>
+            {visible.map((s, i) => (
+              <SuggestionRow key={i} s={s} covered={covered} onPress={() => onCommand(s.command)} />
+            ))}
+          </View>
+        )}
+
+        {menuOpen && (
+          <CommandMenu
+            text={ask}
+            hasProviderKey={hasFirecrawlKey}
+            highlightedIndex={Math.min(highlightedCommand, Math.max(0, filteredCommands.length - 1))}
+            onHighlightedIndexChange={setHighlightedCommand}
+            onSelect={(command) => {
+              setAsk(`/${command.id} `);
+              requestAnimationFrame(() => inputRef.current?.focus());
+            }}
+            onNeedsKey={(command) => {
+              onCommand(`/${command.id}`);
+              setAsk("");
+            }}
+            onDismiss={() => setAsk("")}
+          />
+        )}
 
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <TextInput
+            ref={inputRef}
             value={ask}
-            onChangeText={setAsk}
+            onChangeText={(value) => {
+              setAsk(value);
+              setHighlightedCommand(0);
+            }}
+            onKeyPress={handleKeyPress}
             onSubmitEditing={submit}
             returnKeyType="go"
             placeholder="Ask for anything…"

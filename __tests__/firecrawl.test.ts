@@ -185,7 +185,7 @@ describe("Firecrawl REST primitives", () => {
         }) as never,
       );
     const output = await firecrawlAgent(
-      { prompt: "Compare this market", schema: { malicious: true }, maxCredits: 999999 },
+      { prompt: "Compare this market", depth: "quick", confirmCost: true, schema: { malicious: true }, maxCredits: 999999 },
       "firecrawl-market-research",
     );
     const post = mockedFetch.mock.calls.find(([, init]) => init?.method === "POST");
@@ -203,7 +203,7 @@ describe("Firecrawl REST primitives", () => {
       response(200, { success: true, status: "completed", data: {}, creditsUsed: 4 }) as never,
     );
     await firecrawlAgent(
-      { prompt: "Resume", jobId: "existing-job-1234" },
+      { prompt: "Resume", depth: "quick", confirmCost: true, jobId: "existing-job-1234" },
       "firecrawl-market-research",
     );
     expect(mockedFetch).toHaveBeenCalledTimes(1);
@@ -215,7 +215,7 @@ describe("Firecrawl REST primitives", () => {
       .mockResolvedValueOnce(response(200, { success: true, id: "dedupe-job-1234" }) as never)
       .mockResolvedValueOnce(response(200, { success: true, status: "completed", data: {} }) as never)
       .mockResolvedValueOnce(response(200, { success: true, status: "completed", data: {} }) as never);
-    const args = { prompt: "Unique dedupe test prompt" };
+    const args = { prompt: "Unique dedupe test prompt", depth: "quick", confirmCost: true };
     await firecrawlAgent(args, "firecrawl-market-research");
     await firecrawlAgent(args, "firecrawl-market-research");
     expect(mockedFetch.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
@@ -260,7 +260,7 @@ describe("Firecrawl REST primitives", () => {
       .mockResolvedValueOnce(response(200, { success: true, status: "processing" }) as never)
       .mockResolvedValueOnce(response(200, { success: true }) as never);
     const output = await firecrawlAgent(
-      { prompt: "Bounded research" },
+      { prompt: "Bounded research", depth: "quick", confirmCost: true },
       "firecrawl-market-research",
       controller.signal,
       (progress) => {
@@ -269,6 +269,15 @@ describe("Firecrawl REST primitives", () => {
     );
     expect(output).toContain("cancelled locally");
     expect(mockedFetch.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(true);
+  });
+
+  it("refuses every Agent run without explicit central cost confirmation", async () => {
+    const output = await firecrawlAgent(
+      { prompt: "Do not start", depth: "quick" },
+      "firecrawl-market-research",
+    );
+    expect(output).toContain("explicit Agent cost/depth confirmation");
+    expect(mockedFetch).not.toHaveBeenCalled();
   });
 
   it("exposes the standalone cancellation primitive", async () => {

@@ -13,7 +13,7 @@ when done.
 | 001 | Finish and verify Linear-style global typography | P1 | S | - | DONE |
 | 002 | Add Raycast-compatible provider favicons | P1 | S | - | DONE |
 | 003 | Add the Firecrawl provider runtime | P1 | L | - | DONE |
-| 004 | Add the Firecrawl slash-command catalog and menu | P1 | M | 002, 003 | TODO |
+| 004 | Add the Firecrawl slash-command catalog and menu | P1 | M | 002, 003 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale)

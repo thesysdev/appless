@@ -121,13 +121,53 @@ paid credits, and cancellation may accrue a small amount while an in-flight
 step reaches a stopping point. Results are capped before returning to the model
 while source URLs and recoverable Agent job IDs are retained.
 
-Current limitations: the specialized Firecrawl slash-command catalog is not
-included yet; authenticated dashboards work only inside an already authorized
-session boundary; login walls, CAPTCHAs, robots restrictions, paywalls, CSV
-uploads, CRM writes, outreach, purchases, and destructive submissions are not
-supported. Firecrawl Agent is a Research Preview API, so its isolated protocol
-adapter should be rechecked against the official v2 documentation before
-release.
+### Firecrawl slash commands
+
+Type `/` in the home ask field to open the Firecrawl command menu. Partial text
+such as `/fir` or `/lead` filters the menu only; execution requires an exact
+slash ID. A command can include an initial argument, for example
+`/firecrawl https://example.com` or
+`/firecrawl-lead-research Small public company`. Unknown slash commands are
+never sent to the generic model route.
+
+The enabled catalog is:
+
+- `/firecrawl`
+- `/firecrawl-company-directories`
+- `/firecrawl-competitive-intel`
+- `/firecrawl-dashboard-reporting`
+- `/firecrawl-deep-research`
+- `/firecrawl-demo-walkthrough`
+- `/firecrawl-knowledge-base`
+- `/firecrawl-knowledge-ingest`
+- `/firecrawl-lead-gen`
+- `/firecrawl-lead-research`
+- `/firecrawl-market-research`
+- `/firecrawl-qa`
+- `/firecrawl-research-papers`
+- `/firecrawl-seo-audit`
+- `/firecrawl-shop`
+- `/firecrawl-website-design-clone`
+- `/firecrawl-workflows`
+
+Every command is BYOK-gated and opens a deterministic setup form before any
+Firecrawl request. The form validates required text, URL, bounded number,
+selection, and confirmation inputs locally. It shows the central maximum credit
+budget for the selected workflow/depth and requires explicit confirmation;
+Agent tasks also enforce that confirmation in the runtime. Maximums are credit
+ceilings, not expected spend: most workflows cap at 150 credits, competitive
+and market research at 250, and deep research at 100 quick, 300 thorough, or
+750 exhaustive credits. Base URL/query work still requires confirmation before
+its paid scrape/search request starts.
+
+Results are in-app progress, summary, structured table/list, data-gap, and
+source-link views. AppLess does **not** currently export CSV/JSON/files, upload
+source files, write to a CRM, send outreach, make purchases, or perform
+destructive submissions. Authenticated dashboards work only inside an already
+authorized session boundary; login walls, CAPTCHAs, robots restrictions, and
+paywalls are not bypassed. Firecrawl Agent is a Research Preview API, so its
+isolated protocol adapter should be rechecked against the official v2
+documentation before release.
 
 ## Packages
 

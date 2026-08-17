@@ -60,11 +60,14 @@ export function Text({ style, ...props }: TextProps) {
   return <NativeText {...props} style={[style, { fontFamily, fontWeight: "normal" }]} />;
 }
 
-export function TextInput({ style, ...props }: TextInputProps) {
+export const TextInput = React.forwardRef<NativeTextInput, TextInputProps>(function TextInput(
+  { style, ...props },
+  ref,
+) {
   const loaded = useContext(TypographyReadyContext);
   const fontFamily = familyForStyle(style, loaded);
-  return <NativeTextInput {...props} style={[style, { fontFamily, fontWeight: "normal" }]} />;
-}
+  return <NativeTextInput ref={ref} {...props} style={[style, { fontFamily, fontWeight: "normal" }]} />;
+});
 
 /** Linear-inspired hierarchy using Inter, its closest public substitute. */
 export const linearType = {

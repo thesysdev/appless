@@ -7,6 +7,7 @@ import {
   isFirecrawlTool,
   type FirecrawlProgress,
 } from "./firecrawl";
+export { isFirecrawlTool } from "./firecrawl";
 import {
   executeTool as executeSearchTool,
   TOOL_DEFS as SEARCH_TOOL_DEFS,
@@ -15,6 +16,8 @@ import {
 
 export interface ToolContext {
   workflowId?: string;
+  firecrawlConfirmed?: boolean;
+  firecrawlOperation?: "search" | "scrape" | "agent";
 }
 
 export interface ProviderAvailability {
@@ -25,7 +28,10 @@ export interface ProviderAvailability {
 export function providerAvailability(context: ToolContext = {}): ProviderAvailability {
   return {
     exa: !!EXA_API_KEY,
-    firecrawl: !!firecrawlKey.get() && isFirecrawlWorkflow(context.workflowId),
+    firecrawl:
+      !!firecrawlKey.get() &&
+      context.firecrawlConfirmed === true &&
+      isFirecrawlWorkflow(context.workflowId),
   };
 }
 
@@ -47,7 +53,13 @@ export function enabledPromptSections(context: ToolContext = {}): string {
 }
 
 export function enabledToolDefinitions(context: ToolContext = {}) {
-  return definitionsForProviders(providerAvailability(context));
+  const definitions = definitionsForProviders(providerAvailability(context));
+  if (!context.firecrawlOperation) return definitions;
+  return definitions.filter(
+    (definition) =>
+      !isFirecrawlTool(definition.function.name) ||
+      definition.function.name === `firecrawl_${context.firecrawlOperation}`,
+  );
 }
 
 export function toolsAvailable(context: ToolContext = {}): boolean {
@@ -64,7 +76,11 @@ export async function executeTool(
   if (name === "web_search") return executeSearchTool(name, args, signal);
   if (isFirecrawlTool(name)) {
     if (!firecrawlKey.get()) return "ERROR: Firecrawl key required";
+    if (context.firecrawlConfirmed !== true) return "ERROR: explicit Firecrawl setup and budget confirmation required";
     if (!isFirecrawlWorkflow(context.workflowId)) return "ERROR: Firecrawl tool requires a trusted workflow";
+    if (context.firecrawlOperation && name !== `firecrawl_${context.firecrawlOperation}`) {
+      return `ERROR: this workflow confirmed the ${context.firecrawlOperation} operation, not ${name}`;
+    }
     return executeFirecrawlTool(name, args, context.workflowId, signal, progress);
   }
   return `ERROR: unknown tool "${name}"`;

@@ -10,7 +10,12 @@ jest.mock("expo/fetch", () => ({ fetch: jest.fn() }));
 
 import { loremflickrUrl, parseImgUrl } from "../src/genos/tools/images";
 import { executeTool, formatWebResults } from "../src/genos/tools/search";
-import { definitionsForProviders } from "../src/genos/tools";
+import {
+  definitionsForProviders,
+  enabledToolDefinitions,
+  executeTool as executeRegistryTool,
+} from "../src/genos/tools";
+import { firecrawlKey } from "../src/genos/providers/firecrawl/key";
 
 describe("semantic image queries (/api/img)", () => {
   it("parses the prompt's canonical form", () => {
@@ -97,5 +102,45 @@ describe("provider-scoped tool registry", () => {
     const properties = agent?.function.parameters.properties as Record<string, unknown>;
     expect(properties.maxCredits).toBeUndefined();
     expect(properties.schema).toBeUndefined();
+  });
+
+  it("does not expose or execute Firecrawl before deterministic budget confirmation", async () => {
+    await firecrawlKey.set("fc-disposable-unit-test-only");
+    expect(enabledToolDefinitions({ workflowId: "firecrawl-market-research" })).toEqual([]);
+    expect(
+      enabledToolDefinitions({
+        workflowId: "firecrawl-market-research",
+        firecrawlConfirmed: true,
+      }).map((tool) => tool.function.name),
+    ).toEqual(["firecrawl_search", "firecrawl_scrape", "firecrawl_agent"]);
+    expect(
+      enabledToolDefinitions({
+        workflowId: "firecrawl-market-research",
+        firecrawlConfirmed: true,
+        firecrawlOperation: "agent",
+      }).map((tool) => tool.function.name),
+    ).toEqual(["firecrawl_agent"]);
+    await expect(
+      executeRegistryTool(
+        "firecrawl_search",
+        { query: "must not run" },
+        undefined,
+        undefined,
+        { workflowId: "firecrawl-market-research" },
+      ),
+    ).resolves.toContain("explicit Firecrawl setup and budget confirmation");
+    await expect(
+      executeRegistryTool(
+        "firecrawl_search",
+        { query: "wrong operation" },
+        undefined,
+        undefined,
+        {
+          workflowId: "firecrawl-market-research",
+          firecrawlConfirmed: true,
+          firecrawlOperation: "agent",
+        },
+      ),
+    ).resolves.toContain("confirmed the agent operation");
   });
 });

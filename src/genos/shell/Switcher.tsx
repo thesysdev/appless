@@ -14,6 +14,7 @@ export interface RunningApp {
   emoji: string;
   tile: [string, string];
   providerId?: string;
+  workflowId?: string;
 }
 
 const CARD_W = 188;
@@ -65,7 +66,7 @@ export function Switcher({
           const screenId = topScreenId(app.id);
           const screen = screenId ? screenStore.get(screenId) : undefined;
           return (
-            <View key={app.id} style={{ gap: 8 }}>
+            <View key={app.id} accessibilityLabel={app.workflowId ? `${app.name}, ${app.workflowId} workflow` : app.name} style={{ gap: 8 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 7, width: CARD_W }}>
                 {app.providerId ? (
                   <ProviderIcon providerId={app.providerId} size={22} cornerRadius={6} />
@@ -106,6 +107,11 @@ export function Switcher({
                   <Text style={{ color: "#fff", fontSize: 10, lineHeight: 12 }}>✕</Text>
                 </Pressable>
               </View>
+              {!!app.workflowId && (
+                <Text numberOfLines={1} style={{ width: CARD_W, color: "rgba(255,255,255,0.58)", fontSize: 10 }}>
+                  /{app.workflowId}
+                </Text>
+              )}
               <Pressable
                 onPress={() => onResume(app.id)}
                 style={{

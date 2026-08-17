@@ -31,6 +31,7 @@ import {
   setActiveScreen,
 } from "../src/genos/store";
 import { firecrawlKey } from "../src/genos/providers/firecrawl/key";
+import { FIRECRAWL_COMMANDS, commandToApp } from "../src/genos/commands";
 
 describe("cleanLang", () => {
   it("strips a wrapping markdown fence", () => {
@@ -173,5 +174,31 @@ describe("trusted workflow context", () => {
     setActiveScreen(root);
     const handler = streamCalls.at(-1)?.handlers?.onToolRound as (() => string) | undefined;
     expect(handler?.()).toBe("abort");
+  });
+
+  it("launches a configured slash workflow once with provider/workflow metadata", () => {
+    const command = FIRECRAWL_COMMANDS.find((candidate) => candidate.id === "firecrawl-lead-research")!;
+    const app = commandToApp(command, "Acme public company", {
+      company: "Acme public company",
+      meetingContext: "Intro meeting",
+      depth: "quick",
+      confirmCredits: true,
+    });
+    const before = streamCalls.length;
+    const root = openApp(app);
+    expect(streamCalls).toHaveLength(before + 1);
+    expect(streamCalls.at(-1)?.handlers).toMatchObject({
+      workflowId: "firecrawl-lead-research",
+      firecrawlConfirmed: true,
+      firecrawlOperation: "agent",
+    });
+    expect(screenStore.get(root)).toMatchObject({
+      appId: app.id,
+      workflowId: "firecrawl-lead-research",
+      firecrawlConfirmed: true,
+      workflowInputs: expect.objectContaining({ confirmCredits: true }),
+      request: expect.stringContaining("Acme public company"),
+    });
+    expect(app.providerId).toBe("firecrawl");
   });
 });

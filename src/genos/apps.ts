@@ -9,6 +9,10 @@ export interface AppDef {
   request: string;
   /** Optional trusted runtime contract. Plan 004 will attach these to catalog entries. */
   workflowId?: string;
+  /** Validated, non-secret shell inputs retained through workflow navigation. */
+  workflowInputs?: Record<string, string | number | boolean>;
+  /** Only the deterministic setup form may set this after explicit confirmation. */
+  firecrawlConfirmed?: boolean;
 }
 
 export const DEFAULT_TILE: [string, string] = ["#5e5ce6", "#bf5af2"];

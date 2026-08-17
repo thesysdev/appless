@@ -30,6 +30,55 @@ export interface WorkflowContract {
   requiresAgentConfirmation?: boolean;
 }
 
+export type WorkflowFieldType = "text" | "url" | "number" | "select" | "checkbox";
+
+export interface WorkflowFieldDef {
+  id: string;
+  label: string;
+  type: WorkflowFieldType;
+  required?: boolean;
+  placeholder?: string;
+  hint?: string;
+  min?: number;
+  max?: number;
+  options?: readonly { label: string; value: string }[];
+  visibleWhen?: { fieldId: string; equals: string };
+}
+
+export interface WorkflowSetupDef {
+  workflowId: FirecrawlWorkflowId;
+  fields: readonly WorkflowFieldDef[];
+}
+
+export type WorkflowSetupValues = Record<string, string | number | boolean>;
+
+const field = (
+  id: string,
+  label: string,
+  type: WorkflowFieldType,
+  options: Omit<WorkflowFieldDef, "id" | "label" | "type"> = {},
+): WorkflowFieldDef => ({ id, label, type, ...options });
+
+const depthField = (exhaustive = false): WorkflowFieldDef =>
+  field("depth", "Research depth", "select", {
+    required: true,
+    options: [
+      { label: "Quick", value: "quick" },
+      { label: "Thorough", value: "thorough" },
+      ...(exhaustive ? [{ label: "Exhaustive", value: "exhaustive" }] : []),
+    ],
+  });
+
+const confirmationField = field("confirmCredits", "Confirm the displayed maximum credit budget", "checkbox", {
+  required: true,
+  hint: "This confirmation is required before AppLess starts any Firecrawl request.",
+});
+
+const setup = (
+  workflowId: FirecrawlWorkflowId,
+  fields: readonly WorkflowFieldDef[],
+): WorkflowSetupDef => ({ workflowId, fields: [...fields, confirmationField] });
+
 const contract = (
   id: FirecrawlWorkflowId,
   instructions: string,
@@ -138,6 +187,181 @@ export const FIRECRAWL_WORKFLOWS: Record<FirecrawlWorkflowId, WorkflowContract> 
     true,
   ),
 };
+
+const OUTPUT_OPTIONS = [
+  { label: "Structured list", value: "list" },
+  { label: "Table", value: "table" },
+] as const;
+
+/**
+ * Shell-owned setup contracts. These are deliberately application data, not
+ * local agent SKILL.md files, so packaged builds have the same deterministic
+ * required inputs and credit confirmation behavior.
+ */
+export const FIRECRAWL_WORKFLOW_SETUPS: Record<FirecrawlWorkflowId, WorkflowSetupDef> = {
+  "firecrawl-company-directories": setup("firecrawl-company-directories", [
+    field("directory", "Directory URL or name", "text", { required: true, placeholder: "https://example.com/directory" }),
+    field("filters", "Optional filters", "text", { placeholder: "Region, category, company size" }),
+    field("resultCap", "Maximum results", "number", { required: true, min: 1, max: 100 }),
+    field("outputView", "Output view", "select", { required: true, options: OUTPUT_OPTIONS }),
+    depthField(),
+  ]),
+  "firecrawl-competitive-intel": setup("firecrawl-competitive-intel", [
+    field("competitors", "Competitors", "text", { required: true, placeholder: "Company A, Company B" }),
+    field("scope", "Comparison scope", "text", { required: true, placeholder: "Pricing, features, changelog" }),
+    depthField(),
+  ]),
+  "firecrawl-dashboard-reporting": setup("firecrawl-dashboard-reporting", [
+    field("dashboardUrl", "Authorized dashboard URL", "url", { required: true }),
+    field("metrics", "Metric definitions", "text", { required: true }),
+    field("period", "Reporting period", "text", { required: true, placeholder: "2026 Q2" }),
+    field("authorized", "I am authorized to access this dashboard", "checkbox", { required: true }),
+    depthField(),
+  ]),
+  "firecrawl-deep-research": setup("firecrawl-deep-research", [
+    field("topic", "Research topic", "text", { required: true }),
+    depthField(true),
+    field("confirmExhaustive", "Separately confirm the 750-credit exhaustive ceiling", "checkbox", {
+      required: true,
+      visibleWhen: { fieldId: "depth", equals: "exhaustive" },
+    }),
+  ]),
+  "firecrawl-demo-walkthrough": setup("firecrawl-demo-walkthrough", [
+    field("url", "Public product URL", "url", { required: true }),
+    field("flow", "Bounded flow to observe", "text", { required: true }),
+    depthField(),
+  ]),
+  "firecrawl-knowledge-base": setup("firecrawl-knowledge-base", [
+    field("sources", "Source URLs", "text", { required: true, placeholder: "One or more public URLs" }),
+    field("boundary", "Crawl boundary", "text", { required: true, placeholder: "Docs section and page cap" }),
+    field("pageCap", "Maximum pages", "number", { required: true, min: 1, max: 100 }),
+    depthField(),
+  ]),
+  "firecrawl-knowledge-ingest": setup("firecrawl-knowledge-ingest", [
+    field("sources", "Source URLs", "text", { required: true }),
+    field("boundary", "In-app ingest boundary", "text", { required: true }),
+    field("pageCap", "Maximum pages", "number", { required: true, min: 1, max: 100 }),
+    depthField(),
+  ]),
+  "firecrawl-lead-gen": setup("firecrawl-lead-gen", [
+    field("target", "Target audience and geography", "text", { required: true }),
+    field("sourceNote", "Source or authorization note", "text", { required: true }),
+    field("leadCap", "Maximum leads", "number", { required: true, min: 1, max: 100 }),
+    field("outputView", "Output view", "select", { required: true, options: OUTPUT_OPTIONS }),
+    depthField(),
+  ]),
+  "firecrawl-lead-research": setup("firecrawl-lead-research", [
+    field("company", "Company name or URL", "text", { required: true }),
+    field("person", "Optional person", "text"),
+    field("meetingContext", "Meeting context", "text", { required: true }),
+    depthField(),
+  ]),
+  "firecrawl-market-research": setup("firecrawl-market-research", [
+    field("market", "Market and geography", "text", { required: true }),
+    field("period", "Period", "text", { required: true }),
+    field("question", "Research question", "text", { required: true }),
+    depthField(),
+  ]),
+  "firecrawl-qa": setup("firecrawl-qa", [
+    field("targetUrl", "Public target URL", "url", { required: true }),
+    field("charter", "Bounded test charter", "text", { required: true }),
+    field("allowedActions", "Allowed read-only actions", "text", { required: true }),
+    depthField(),
+  ]),
+  "firecrawl-research-papers": setup("firecrawl-research-papers", [
+    field("topic", "Paper topic", "text", { required: true }),
+    field("scope", "Date or publication scope", "text", { required: true }),
+    field("paperCap", "Maximum papers", "number", { required: true, min: 1, max: 50 }),
+    depthField(),
+  ]),
+  "firecrawl-seo-audit": setup("firecrawl-seo-audit", [
+    field("siteUrl", "Site URL", "url", { required: true }),
+    field("boundary", "Crawl boundary", "text", { required: true }),
+    field("pageCap", "Maximum pages", "number", { required: true, min: 1, max: 100 }),
+    depthField(),
+  ]),
+  "firecrawl-shop": setup("firecrawl-shop", [
+    field("product", "Product and constraints", "text", { required: true }),
+    field("geography", "Shopping geography", "text", { required: true }),
+    field("resultCap", "Maximum options", "number", { required: true, min: 1, max: 50 }),
+    depthField(),
+  ]),
+  "firecrawl-website-design-clone": setup("firecrawl-website-design-clone", [
+    field("targetUrl", "Target page URL", "url", { required: true }),
+    field("scope", "Pages and design scope", "text", { required: true }),
+    field("respectRights", "I will respect asset and content rights", "checkbox", { required: true }),
+    depthField(),
+  ]),
+  "firecrawl-workflows": setup("firecrawl-workflows", [
+    field("goal", "What do you need?", "text", { required: true }),
+    field("workflowChoice", "Concrete workflow", "select", {
+      required: true,
+      options: FIRECRAWL_WORKFLOW_IDS.filter((id) => id !== "firecrawl" && id !== "firecrawl-workflows").map((id) => ({ label: id.replace(/^firecrawl-/, "").replace(/-/g, " "), value: id })),
+    }),
+    depthField(),
+  ]),
+  firecrawl: setup("firecrawl", [
+    field("operation", "Operation", "select", {
+      required: true,
+      options: [
+        { label: "Scrape one URL", value: "scrape" },
+        { label: "Search the web", value: "search" },
+        { label: "Agent research", value: "agent" },
+      ],
+    }),
+    field("url", "URL", "url", { required: true, visibleWhen: { fieldId: "operation", equals: "scrape" } }),
+    field("query", "Search query", "text", { required: true, visibleWhen: { fieldId: "operation", equals: "search" } }),
+    field("task", "Agent task", "text", { required: true, visibleWhen: { fieldId: "operation", equals: "agent" } }),
+    field("resultCap", "Maximum search results", "number", { required: true, min: 1, max: 10, visibleWhen: { fieldId: "operation", equals: "search" } }),
+    { ...depthField(true), visibleWhen: { fieldId: "operation", equals: "agent" } },
+  ]),
+};
+
+export function visibleWorkflowFields(
+  workflowId: FirecrawlWorkflowId,
+  values: WorkflowSetupValues,
+): readonly WorkflowFieldDef[] {
+  return FIRECRAWL_WORKFLOW_SETUPS[workflowId].fields.filter(
+    (candidate) => !candidate.visibleWhen || values[candidate.visibleWhen.fieldId] === candidate.visibleWhen.equals,
+  );
+}
+
+export function validateWorkflowSetup(
+  workflowId: FirecrawlWorkflowId,
+  values: WorkflowSetupValues,
+): Record<string, string> {
+  const errors: Record<string, string> = {};
+  for (const candidate of visibleWorkflowFields(workflowId, values)) {
+    const value = values[candidate.id];
+    if (candidate.required && (value === undefined || value === "" || value === false)) {
+      errors[candidate.id] = `${candidate.label} is required`;
+      continue;
+    }
+    if (candidate.type === "url" && typeof value === "string" && value) {
+      try {
+        const url = new URL(value);
+        if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error();
+      } catch {
+        errors[candidate.id] = "Enter a valid HTTP(S) URL";
+      }
+    }
+    if (candidate.type === "number" && value !== undefined && value !== "") {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric) || (candidate.min !== undefined && numeric < candidate.min) || (candidate.max !== undefined && numeric > candidate.max)) {
+        errors[candidate.id] = `Enter a number from ${candidate.min ?? 0} to ${candidate.max ?? "the allowed maximum"}`;
+      }
+    }
+  }
+  return errors;
+}
+
+export function setupCreditBudget(
+  workflowId: FirecrawlWorkflowId,
+  values: WorkflowSetupValues,
+): number {
+  const depth = values.depth === "thorough" || values.depth === "exhaustive" ? values.depth : "quick";
+  return agentPolicy(workflowId, depth)?.maxCredits ?? 0;
+}
 
 export function isFirecrawlWorkflow(id: string | undefined): id is FirecrawlWorkflowId {
   return !!id && Object.prototype.hasOwnProperty.call(FIRECRAWL_WORKFLOWS, id);

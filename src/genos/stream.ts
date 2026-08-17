@@ -11,7 +11,7 @@
 import { fetch as expoFetch } from "expo/fetch";
 import { CEREBRAS_BASE_URL, GENOS_MODEL, cerebrasKey } from "../config";
 import { SYSTEM_PROMPT } from "./generated/system-prompt";
-import { enabledPromptSections, enabledToolDefinitions, executeTool, toolsAvailable } from "./tools";
+import { enabledPromptSections, enabledToolDefinitions, executeTool, isFirecrawlTool, toolsAvailable } from "./tools";
 import { workflowPrompt } from "./workflows";
 
 export interface ToolCall {
@@ -52,6 +52,8 @@ interface StreamHandlers {
   onToolRound?: (calls: Array<{ name: string; args: Record<string, unknown> }>) => "continue" | "abort";
   onToolProgress?: (progress: { state: "starting" | "processing"; elapsedMs: number; jobId?: string }) => void;
   workflowId?: string;
+  firecrawlConfirmed?: boolean;
+  firecrawlOperation?: "search" | "scrape" | "agent";
   signal?: AbortSignal;
 }
 
@@ -109,7 +111,7 @@ function createUtf8Decoder(): (chunk: Uint8Array) => string {
 }
 
 /** System prompt + optional tools section + today's date line. */
-function systemPrompt(workflowId?: string): string {
+function systemPrompt(workflowId?: string, firecrawlConfirmed = false): string {
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -117,7 +119,7 @@ function systemPrompt(workflowId?: string): string {
     day: "numeric",
   });
   return (
-    SYSTEM_PROMPT + enabledPromptSections({ workflowId }) + workflowPrompt(workflowId) + `\n\nToday is ${today}.`
+    SYSTEM_PROMPT + enabledPromptSections({ workflowId, firecrawlConfirmed }) + workflowPrompt(workflowId) + `\n\nToday is ${today}.`
   );
 }
 
@@ -138,6 +140,8 @@ async function streamRound(
   includeTools: boolean,
   onDelta: (text: string) => void,
   workflowId?: string,
+  firecrawlConfirmed = false,
+  firecrawlOperation?: "search" | "scrape" | "agent",
   signal?: AbortSignal,
 ): Promise<RoundResult> {
   const apiKey = cerebrasKey.get();
@@ -151,8 +155,8 @@ async function streamRound(
     },
     body: JSON.stringify({
       model: GENOS_MODEL,
-      messages: [{ role: "system", content: systemPrompt(workflowId) }, ...convo],
-      ...(includeTools ? { tools: enabledToolDefinitions({ workflowId }) } : {}),
+      messages: [{ role: "system", content: systemPrompt(workflowId, firecrawlConfirmed) }, ...convo],
+      ...(includeTools ? { tools: enabledToolDefinitions({ workflowId, firecrawlConfirmed, firecrawlOperation }) } : {}),
       stream: true,
       temperature: 0.8,
       max_completion_tokens: 3072,
@@ -251,14 +255,24 @@ async function streamRound(
 }
 
 export async function streamScreen(messages: ChatMessage[], handlers: StreamHandlers) {
-  const { onDelta, onDone, onError, onToolRound, onToolProgress, workflowId, signal } = handlers;
+  const { onDelta, onDone, onError, onToolRound, onToolProgress, workflowId, firecrawlConfirmed, firecrawlOperation, signal } = handlers;
   const convo: ChatMessage[] = [...messages];
+  let firecrawlCallStarted = false;
 
   try {
     for (let round = 0; ; round++) {
       // Past the round budget, stop offering tools - forces a screen.
-      const includeTools = toolsAvailable({ workflowId }) && round < MAX_TOOL_ROUNDS;
-      const result = await streamRound(convo, includeTools, onDelta, workflowId, signal);
+      const context = { workflowId, firecrawlConfirmed, firecrawlOperation };
+      const includeTools = toolsAvailable(context) && round < MAX_TOOL_ROUNDS;
+      const result = await streamRound(
+        convo,
+        includeTools,
+        onDelta,
+        workflowId,
+        firecrawlConfirmed,
+        firecrawlOperation,
+        signal,
+      );
 
       if (result.finish !== "tool_calls") {
         onDone(result.info);
@@ -288,7 +302,12 @@ export async function streamScreen(messages: ChatMessage[], handlers: StreamHand
       // by parallel/speculative dispatch of the same round.
       const outputs: string[] = [];
       for (const call of calls) {
-        outputs.push(await executeTool(call.name, call.args, signal, onToolProgress, { workflowId }));
+        if (isFirecrawlTool(call.name) && firecrawlCallStarted) {
+          outputs.push("ERROR: this workflow already started its one confirmed Firecrawl operation");
+          continue;
+        }
+        if (isFirecrawlTool(call.name)) firecrawlCallStarted = true;
+        outputs.push(await executeTool(call.name, call.args, signal, onToolProgress, context));
       }
       if (signal?.aborted) return;
       result.toolCalls.forEach((tc, i) => {

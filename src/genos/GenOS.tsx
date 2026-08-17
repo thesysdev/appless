@@ -24,10 +24,16 @@ import { cerebrasKey } from "../config";
 import { firecrawlKey } from "./providers/firecrawl/key";
 import type { AppDef } from "./apps";
 import { APPS, DEFAULT_TILE, summonApp } from "./apps";
+import {
+  commandToApp,
+  parseSlashCommand,
+  type SlashCommandDef,
+} from "./commands";
 import { genosLibrary } from "./library";
 import { HomeScreen } from "./shell/HomeScreen";
 import { KeyGate } from "./shell/KeyGate";
 import { ProviderKeyGate } from "./shell/ProviderKeyGate";
+import { WorkflowSetup } from "./shell/WorkflowSetup";
 import { Switcher, type RunningApp } from "./shell/Switcher";
 import {
   cleanLang,
@@ -42,6 +48,7 @@ import { useCds } from "./theme";
 import { Text } from "./typography";
 import { AppsIcon, LucideIcon } from "./ui/icons";
 import { isFirecrawlWorkflow } from "./workflows";
+import type { WorkflowSetupValues } from "./workflows";
 
 /** Shape of the ActionEvent the Renderer dispatches (subset we use). */
 interface GenActionEvent {
@@ -55,6 +62,7 @@ interface AppMeta {
   emoji: string;
   tile: [string, string];
   providerId?: string;
+  workflowId?: string;
 }
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -205,6 +213,8 @@ export default function GenOS() {
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; key: number } | null>(null);
   const [dismissedProviderGate, setDismissedProviderGate] = useState<string | null>(null);
+  const [pendingWorkflow, setPendingWorkflow] = useState<{ command: SlashCommandDef; argument: string } | null>(null);
+  const [pendingProviderGate, setPendingProviderGate] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Apps the user has sent home - only these show as icons on the home screen. */
@@ -313,6 +323,7 @@ export default function GenOS() {
         emoji: app.emoji,
         tile: app.tile,
         providerId: app.providerId,
+        workflowId: app.workflowId,
       });
       // openApp touches the screen store (which notifies subscribers), so it
       // must run here in the event handler - never inside a setState updater.
@@ -383,18 +394,25 @@ export default function GenOS() {
   /** genos://open deep link - jump into another app at a specific screen. */
   const deepLink = useCallback(
     (appId: string, request: string) => {
-      const id = openDeepLink(appId, request, top?.workflowId);
+      const id = openDeepLink(
+        appId,
+        request,
+        top?.workflowId,
+        top?.firecrawlConfirmed,
+        top?.workflowInputs,
+      );
       const known = APPS.find((a) => a.id === appId.toLowerCase());
       rememberMeta(appId.toLowerCase(), {
         name: known?.name ?? capitalize(appId),
         emoji: known?.emoji ?? "✨",
         tile: known?.tile ?? DEFAULT_TILE,
         providerId: known?.providerId,
+        workflowId: known?.workflowId,
       });
       pushScreen(appId.toLowerCase(), id);
       activate(appId.toLowerCase());
     },
-    [activate, rememberMeta, pushScreen, top?.workflowId],
+    [activate, rememberMeta, pushScreen, top?.workflowId, top?.firecrawlConfirmed, top?.workflowInputs],
   );
 
   /**
@@ -527,6 +545,24 @@ export default function GenOS() {
         return;
       }
 
+      // Slash execution is exact and precedes all app/model routing. Leading
+      // whitespace is intentionally not a slash command, and unknown slash
+      // input never falls through to an unrelated active app or Cerebras.
+      const slash = parseSlashCommand(transcript);
+      if (slash.kind === "unknown") {
+        showToast(`Unknown slash command: /${slash.commandId || ""}`);
+        return;
+      }
+      if (slash.kind === "known") {
+        if (slash.command.availability === "unavailable") {
+          showToast(`/${slash.command.id} is unavailable`);
+          return;
+        }
+        setPendingWorkflow({ command: slash.command, argument: slash.argument });
+        if (!firecrawlKey.get()) setPendingProviderGate(true);
+        return;
+      }
+
       // "open/launch/switch to <app>" jumps to a known app from anywhere.
       const openMatch = lower.match(/^(?:open|launch|switch to|go to)\s+(.+)$/);
       const known = APPS.find((a) => (openMatch?.[1] ?? lower).includes(a.name.toLowerCase()));
@@ -544,7 +580,7 @@ export default function GenOS() {
         request: `Open the perfect app screen for this request: "${text}". Invent a polished, realistic screen that fulfils it.`,
       });
     },
-    [activeApp, topId, launch, goBack, goHome, pushScreen, closeSession],
+    [activeApp, topId, launch, goBack, goHome, pushScreen, closeSession, showToast],
   );
 
   // Memoized: HomeScreen is React.memo'd and stays mounted under active
@@ -559,6 +595,7 @@ export default function GenOS() {
           emoji: appMeta[id]?.emoji ?? "✨",
           tile: appMeta[id]?.tile ?? DEFAULT_TILE,
           providerId: appMeta[id]?.providerId,
+          workflowId: appMeta[id]?.workflowId,
         })),
     [recentOrder, sessions, appMeta],
   );
@@ -579,6 +616,7 @@ export default function GenOS() {
         runningApps={homeApps}
         onResume={activate}
         onClose={closeSession}
+        hasFirecrawlKey={firecrawlKeyStatus === "present"}
       />
 
       {top && (
@@ -834,7 +872,37 @@ export default function GenOS() {
         />
       )}
 
+      {pendingWorkflow && (
+        <WorkflowSetup
+          command={pendingWorkflow.command}
+          argument={pendingWorkflow.argument}
+          onCancel={() => {
+            setPendingWorkflow(null);
+            setPendingProviderGate(false);
+          }}
+          onSubmit={(values: WorkflowSetupValues) => {
+            const app = commandToApp(pendingWorkflow.command, pendingWorkflow.argument, values);
+            setPendingWorkflow(null);
+            setPendingProviderGate(false);
+            launch(app);
+          }}
+        />
+      )}
+
+      {pendingProviderGate &&
+        (firecrawlKeyStatus === "missing" || firecrawlKeyStatus === "rejected") && (
+          <ProviderKeyGate
+            status={firecrawlKeyStatus}
+            onDismiss={() => {
+              setPendingProviderGate(false);
+              setPendingWorkflow(null);
+            }}
+            onConnected={() => setPendingProviderGate(false)}
+          />
+        )}
+
       {topId &&
+        !pendingProviderGate &&
         isFirecrawlWorkflow(top?.workflowId) &&
         (firecrawlKeyStatus === "missing" || firecrawlKeyStatus === "rejected") &&
         dismissedProviderGate !== topId && (

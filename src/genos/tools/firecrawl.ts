@@ -293,7 +293,7 @@ export async function firecrawlAgent(
     args.depth === "thorough" || args.depth === "exhaustive" ? args.depth : "quick";
   const policy = agentPolicy(workflowId, depth);
   if (!policy) return "ERROR: firecrawl_agent requires a trusted Firecrawl workflow";
-  if ((policy.contract.requiresAgentConfirmation || depth === "exhaustive") && args.confirmCost !== true) {
+  if (args.confirmCost !== true) {
     return "ERROR: explicit Agent cost/depth confirmation is required";
   }
   const prompt = typeof args.prompt === "string" ? args.prompt.trim() : "";
@@ -386,7 +386,7 @@ export const FIRECRAWL_TOOL_DEFS = [
           confirmCost: { type: "boolean" },
           jobId: { type: "string", description: "Existing job ID to resume without creating another paid job" },
         },
-        required: ["prompt"],
+        required: ["prompt", "depth", "confirmCost"],
       },
     },
   },

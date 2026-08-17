@@ -16,6 +16,8 @@ export interface Screen {
   parentId?: string;
   /** Trusted provider workflow inherited by every descendant screen. */
   workflowId?: string;
+  workflowInputs?: Record<string, string | number | boolean>;
+  firecrawlConfirmed?: boolean;
   /** Accumulating openui-lang source. */
   content: string;
   status: ScreenStatus;
@@ -217,6 +219,13 @@ function startStream(id: string) {
   streamScreen(buildMessages(screen), {
     signal: controller.signal,
     workflowId: screen.workflowId,
+    firecrawlConfirmed: screen.firecrawlConfirmed,
+    firecrawlOperation:
+      screen.workflowId === "firecrawl"
+        ? (screen.workflowInputs?.operation as "search" | "scrape" | "agent" | undefined)
+        : isFirecrawlWorkflow(screen.workflowId)
+          ? "agent"
+          : undefined,
     onDelta: (delta) => {
       if (!stale()) screenStore.append(id, delta);
     },
@@ -279,6 +288,8 @@ interface LaunchInput {
   request: string;
   parentId?: string;
   workflowId?: string;
+  workflowInputs?: Record<string, string | number | boolean>;
+  firecrawlConfirmed?: boolean;
   speculative: boolean;
 }
 
@@ -326,6 +337,8 @@ export function openApp(app: AppDef): string {
     appName: app.name,
     request: app.request,
     workflowId: app.workflowId,
+    workflowInputs: app.workflowInputs,
+    firecrawlConfirmed: app.firecrawlConfirmed,
     speculative: false,
   });
   appHomeIndex.set(app.id, id);
@@ -336,8 +349,14 @@ export function openApp(app: AppDef): string {
 const deepLinkIndex = new Map<string, string>();
 
 /** Open a screen in another app via a genos://open deep link. */
-export function openDeepLink(appId: string, request: string, parentWorkflowId?: string): string {
-  const key = `${appId.toLowerCase()} ${parentWorkflowId ?? ""} ${request}`;
+export function openDeepLink(
+  appId: string,
+  request: string,
+  parentWorkflowId?: string,
+  firecrawlConfirmed = false,
+  workflowInputs?: Record<string, string | number | boolean>,
+): string {
+  const key = `${appId.toLowerCase()} ${parentWorkflowId ?? ""} ${firecrawlConfirmed ? "confirmed" : "unconfirmed"} ${JSON.stringify(workflowInputs ?? {})} ${request}`;
   const existing = deepLinkIndex.get(key);
   if (existing) {
     const screen = screenStore.get(existing);
@@ -353,6 +372,8 @@ export function openDeepLink(appId: string, request: string, parentWorkflowId?: 
     appName: app?.name ?? appId.charAt(0).toUpperCase() + appId.slice(1),
     request,
     workflowId: parentWorkflowId ?? app?.workflowId,
+    workflowInputs: workflowInputs ?? app?.workflowInputs,
+    firecrawlConfirmed: firecrawlConfirmed || app?.firecrawlConfirmed,
     speculative: false,
   });
   deepLinkIndex.set(key, id);
@@ -400,6 +421,8 @@ export function resolveAction(
     request,
     parentId,
     workflowId: parent?.workflowId,
+    workflowInputs: parent?.workflowInputs,
+    firecrawlConfirmed: parent?.firecrawlConfirmed,
     speculative: false,
   });
   if (!hasFormValues) actionIndex.set(key, id);
@@ -451,6 +474,8 @@ function maybePrefetch(id: string) {
       request: message,
       parentId: id,
       workflowId: screen.workflowId,
+      workflowInputs: screen.workflowInputs,
+      firecrawlConfirmed: screen.firecrawlConfirmed,
       speculative: true,
     });
     actionIndex.set(key, childId);
