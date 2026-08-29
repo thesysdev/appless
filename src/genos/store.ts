@@ -150,7 +150,7 @@ const actionKey = (parentId: string, message: string) => `${parentId} ${message}
  * renderer never sees a marker fragment - `]]>` followed by marker characters
  * at the very end of the buffer is never valid openui-lang.
  */
-export function stripInlineMarkers(text: string): string {
+function stripInlineMarkers(text: string): string {
   return text
     .replace(/^\s*\]\]>openui:content(?:\?\S*)?[^\S\n]*\n?/, "")
     .replace(/\n?\]\]>openui:end[\s\S]*$/, "")

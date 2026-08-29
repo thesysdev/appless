@@ -10,7 +10,7 @@ jest.mock("expo-secure-store", () => ({
 }));
 jest.mock("expo/fetch", () => ({ fetch: jest.fn() }));
 
-// Capture stream launches instead of hitting OpenUI Cloud.
+// Capture stream launches instead of hitting Cerebras.
 const streamCalls: Array<{ messages: unknown }> = [];
 jest.mock("../src/genos/stream", () => ({
   NEEDS_LIVE_DATA: "needs live data",
@@ -26,37 +26,9 @@ import {
   parseOsCommand,
   resolveAction,
   screenStore,
-  stripInlineMarkers,
 } from "../src/genos/store";
 
-describe("stripInlineMarkers", () => {
-  it("unwraps a complete OpenUI Cloud inline content section", () => {
-    const wrapped =
-      "]]>openui:content?thesys=true&libraryVersion=appless-native-0.1.0\n" +
-      'root = Card([h])\nh = CardHeader("Hi")\n]]>openui:end';
-    expect(stripInlineMarkers(wrapped)).toBe('root = Card([h])\nh = CardHeader("Hi")');
-  });
-
-  it("hides markers that are still streaming in", () => {
-    expect(stripInlineMarkers("]]>openui:cont")).toBe("");
-    expect(stripInlineMarkers("]]>openui:content\nroot = Card([h])\n]]>openui:")).toBe(
-      "root = Card([h])",
-    );
-  });
-
-  it("leaves programs without markers alone", () => {
-    const program = 'root = Card([c])\nc = Chips(["All", "Sushi"])';
-    expect(stripInlineMarkers(program)).toBe(program);
-  });
-});
-
 describe("cleanLang", () => {
-  it("strips inline markers around a fenced program", () => {
-    expect(
-      cleanLang("]]>openui:content?thesys=true\n```openui-lang\nroot = Card([h])\n```\n]]>openui:end"),
-    ).toBe("root = Card([h])");
-  });
-
   it("strips a wrapping markdown fence", () => {
     expect(cleanLang('```openui\nroot = Card([h])\nh = CardHeader("Hi")\n```')).toBe(
       'root = Card([h])\nh = CardHeader("Hi")',
