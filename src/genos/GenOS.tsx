@@ -21,7 +21,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { cerebrasKey } from "../config";
+import { thesysKey } from "../config";
 import type { AppDef } from "./apps";
 import { APPS, DEFAULT_TILE, summonApp } from "./apps";
 import { genosLibrary } from "./library";
@@ -186,7 +186,7 @@ function Skeleton() {
 
 export default function GenOS() {
   useSyncExternalStore(screenStore.subscribe, screenStore.getVersion);
-  const keyStatus = useSyncExternalStore(cerebrasKey.subscribe, cerebrasKey.getStatus);
+  const keyStatus = useSyncExternalStore(thesysKey.subscribe, thesysKey.getStatus);
 
   const t = useCds();
   const insets = useSafeAreaInsets();

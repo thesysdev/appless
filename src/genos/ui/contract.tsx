@@ -2,10 +2,10 @@
  * The GenOS component CONTRACT - the single model-facing surface.
  *
  * Everything the LLM knows about the component library lives here: names,
- * positional prop schemas and descriptions. They mirror the surface that
- * generates the shared system prompt - which is currently embedded from the
- * appless-os web repo via scripts/embed-prompt.mjs (see the README), so keep
- * this contract and the embedded prompt in sync. Renderers (Cupertino today,
+ * positional prop schemas and descriptions. This contract IS the prompt: it
+ * is serialized into the chatLibrary that OpenUI Cloud generates the system
+ * prompt from (scripts/generate-prompt.mjs), so a component only exists for
+ * the model once it exists here. Renderers (Cupertino today,
  * Material on Android, Liquid Glass later) only decide how each component
  * LOOKS, never what it IS.
  *

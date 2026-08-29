@@ -1,15 +1,16 @@
 /**
- * Direct Cerebras streaming (OpenAI-compatible chat completions) with a real
+ * OpenUI Cloud streaming (OpenAI-compatible chat completions) with a real
  * tool-calling loop: rounds that finish in tool_calls execute the tools
  * (web_search) and feed results back as `tool` messages until the model
- * streams the screen itself. There is no server - the app prepends the
- * generated system prompt and holds the conversation. Cerebras allows
- * browser origins (Access-Control-Allow-Origin: *), so this same path
- * serves native and web builds.
+ * streams the screen itself. There is no server of our own - the app sends
+ * the generated `]]>openui:config` block as its system message, so the Cloud
+ * generates the system prompt from AppLess' own component library, validates
+ * the openui-lang it streams back against that same library, and routes the
+ * model call to Cerebras (PROVIDER_ROUTING).
  */
 
 import { fetch as expoFetch } from "expo/fetch";
-import { CEREBRAS_BASE_URL, GENOS_MODEL, cerebrasKey } from "../config";
+import { GENOS_MODEL, PROVIDER_ROUTING, THESYS_BASE_URL, thesysKey } from "../config";
 import { SYSTEM_PROMPT } from "./generated/system-prompt";
 import { TOOLS_PROMPT_SECTION, TOOL_DEFS, executeTool, toolsAvailable } from "./tools/search";
 
@@ -105,7 +106,10 @@ function createUtf8Decoder(): (chunk: Uint8Array) => string {
   };
 }
 
-/** System prompt + optional tools section + today's date line. */
+/**
+ * The OpenUI Cloud config block, followed by the request-time prose the Cloud
+ * preserves as developer instructions (tools section + today's date line).
+ */
 function systemPrompt(): string {
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -129,6 +133,8 @@ interface RoundResult {
  * One streamed completion. Content deltas are forwarded live; tool-call
  * deltas are accumulated by index (Cerebras sends whole calls per chunk, but
  * the accumulator also handles OpenAI-style split `arguments` fragments).
+ * Content arrives wrapped in OpenUI inline section markers, which cleanLang()
+ * strips on the way to the parser.
  */
 async function streamRound(
   convo: ChatMessage[],
@@ -136,10 +142,10 @@ async function streamRound(
   onDelta: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<RoundResult> {
-  const apiKey = cerebrasKey.get();
-  if (!apiKey) throw new Error("No Cerebras API key set");
+  const apiKey = thesysKey.get();
+  if (!apiKey) throw new Error("No Thesys API key set");
 
-  const res = await expoFetch(`${CEREBRAS_BASE_URL}/chat/completions`, {
+  const res = await expoFetch(`${THESYS_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -152,12 +158,17 @@ async function streamRound(
       stream: true,
       temperature: 0.8,
       max_completion_tokens: 3072,
+      // Provider routing travels twice on purpose: `provider` is what the
+      // Cloud honours alongside a managed config block, `metadata.thesys` is
+      // the documented form for plain (unmanaged) embed requests.
+      provider: PROVIDER_ROUTING,
+      metadata: { thesys: JSON.stringify({ c1_openrouter_provider: PROVIDER_ROUTING }) },
     }),
     signal,
   });
   if (res.status === 401 || res.status === 403) {
-    cerebrasKey.markRejected(apiKey);
-    throw new Error("Cerebras rejected the API key - enter a valid key");
+    thesysKey.markRejected(apiKey);
+    throw new Error("Thesys rejected the API key - enter a valid key");
   }
   if (!res.ok || !res.body) {
     const detail = await res.text().catch(() => "");

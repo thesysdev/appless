@@ -144,13 +144,28 @@ const inflight = new Map<string, AbortController>();
 const actionKey = (parentId: string, message: string) => `${parentId} ${message}`;
 
 /**
+ * Strip OpenUI Cloud's inline section markers: the stream opens with
+ * `]]>openui:content?thesys=true&…` and closes with `]]>openui:end`. Partial
+ * markers (a chunk boundary inside the sentinel) are dropped too, so the
+ * renderer never sees a marker fragment - `]]>` followed by marker characters
+ * at the very end of the buffer is never valid openui-lang.
+ */
+function stripInlineMarkers(text: string): string {
+  return text
+    .replace(/^\s*\]\]>openui:content(?:\?\S*)?[^\S\n]*\n?/, "")
+    .replace(/\n?\]\]>openui:end[\s\S]*$/, "")
+    .replace(/\n?\]\]>[\w:?=&.-]*$/, "");
+}
+
+/**
  * Strip markdown fences the model may wrap around the program. Safe on
  * partial streams, and safe on programs that legitimately contain a fence
  * mid-text: the trailing cut only applies when an opening fence was present.
  */
 export function cleanLang(text: string): string {
-  const opened = /^\s*```/.test(text);
-  let t = text.replace(/^\s*```[\w-]*[^\S\n]*\n?/, "");
+  const t0 = stripInlineMarkers(text);
+  const opened = /^\s*```/.test(t0);
+  let t = t0.replace(/^\s*```[\w-]*[^\S\n]*\n?/, "");
   if (opened) {
     const end = t.indexOf("\n```");
     if (end !== -1) t = t.slice(0, end);

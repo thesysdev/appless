@@ -1,22 +1,31 @@
 /**
- * All generation runs in the app itself - the phone talks straight to the
- * Cerebras API (BYOK). The key resolves from EXPO_PUBLIC_CEREBRAS_API_KEY at
- * build time, falling back to a device-stored key entered on first launch
- * (SecureStore on iOS/Android, localStorage on web).
+ * All generation runs in the app itself - the phone talks straight to OpenUI
+ * Cloud (https://api.thesys.dev/v1/embed), an OpenAI-compatible endpoint that
+ * owns the system prompt, validates the generated openui-lang against the
+ * app's own component library and routes the model call to Cerebras. The key
+ * resolves from EXPO_PUBLIC_THESYS_API_KEY at build time, falling back to a
+ * device-stored key entered on first launch (SecureStore on iOS/Android,
+ * localStorage on web).
  */
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
-export const CEREBRAS_BASE_URL =
-  process.env.EXPO_PUBLIC_CEREBRAS_BASE_URL ?? "https://api.cerebras.ai/v1";
-export const GENOS_MODEL = process.env.EXPO_PUBLIC_GENOS_MODEL ?? "gemma-4-31b";
+export const THESYS_BASE_URL =
+  process.env.EXPO_PUBLIC_THESYS_BASE_URL ?? "https://api.thesys.dev/v1/embed";
+export const GENOS_MODEL = process.env.EXPO_PUBLIC_GENOS_MODEL ?? "google/gemma-4-31b-it";
+
+/**
+ * OpenRouter provider routing, passed through OpenUI Cloud: AppLess only ever
+ * wants Cerebras' latency, never a slower fallback.
+ */
+export const PROVIDER_ROUTING = { only: ["cerebras"], allow_fallbacks: false } as const;
 
 /** Optional tool keys - features degrade gracefully when absent. */
 export const UNSPLASH_ACCESS_KEY = process.env.EXPO_PUBLIC_UNSPLASH_ACCESS_KEY;
 export const EXA_API_KEY = process.env.EXPO_PUBLIC_EXA_API_KEY;
 
-const STORAGE_KEY = "genos.cerebras-key";
-const ENV_KEY = process.env.EXPO_PUBLIC_CEREBRAS_API_KEY;
+const STORAGE_KEY = "genos.thesys-key";
+const ENV_KEY = process.env.EXPO_PUBLIC_THESYS_API_KEY;
 
 async function persistedRead(): Promise<string | null> {
   if (Platform.OS === "web") {
@@ -104,4 +113,4 @@ class KeyStore {
   }
 }
 
-export const cerebrasKey = new KeyStore();
+export const thesysKey = new KeyStore();
