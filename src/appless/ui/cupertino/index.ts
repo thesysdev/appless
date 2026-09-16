@@ -1,6 +1,5 @@
-/** The Material 3 (Android) renderer set for the GenOS contract. */
-import type { GenosRenderers } from "../contract";
-import { createChartRenderers } from "../shared/charts";
+/** The Cupertino (iOS) renderer set for the AppLess contract. */
+import type { ApplessRenderers } from "../contract";
 import {
   Bubbles,
   Card,
@@ -19,6 +18,13 @@ import {
   Toggle,
 } from "./components";
 import {
+  AreaChart,
+  BarChart,
+  HorizontalBarChart,
+  LineChart,
+  PieChart,
+} from "./charts";
+import {
   Button,
   Buttons,
   DatePicker,
@@ -30,12 +36,8 @@ import {
   TextArea,
 } from "./forms";
 import { MapView } from "./map";
-import { useMdChartTheme } from "./theme";
 
-const { BarChart, LineChart, AreaChart, PieChart, HorizontalBarChart } =
-  createChartRenderers(useMdChartTheme);
-
-export const materialRenderers: GenosRenderers = {
+export const cupertinoRenderers: ApplessRenderers = {
   Card,
   CardHeader,
   TextContent,

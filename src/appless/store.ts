@@ -1,3 +1,4 @@
+import { APPLESS_PREFETCH_LIMIT } from "../config";
 import type { AppDef } from "./apps";
 import { APPS } from "./apps";
 import type { ChatMessage } from "./stream";
@@ -43,8 +44,8 @@ export function parseOsCommand(text: string): Screen["osCommand"] | undefined {
 
 // Store
 /**
- * Coalesce streaming re-renders. The provider streams at ~1850 tok/s - a delta
- * every fraction of a millisecond. Re-parsing and re-rendering the whole native
+ * Coalesce streaming re-renders, including bursts of OUI-1 diffusion blocks.
+ * Re-parsing and re-rendering the whole native
  * component tree (SVG icons, images, charts) on every tiny delta produces a
  * render storm that, on React Native's reconciler, can race native layout/image
  * callbacks into a setState loop ("Maximum update depth exceeded"). Buffering
@@ -123,7 +124,6 @@ class ScreenStore {
 export const screenStore = new ScreenStore();
 
 // Controller: generation, navigation cache, speculative prefetch
-const MAX_PREFETCH = 6;
 /** How many ancestor screens to replay as conversation context. */
 const CONTEXT_DEPTH = 2;
 /** A cached screen still pending/streaming after this long is considered stuck. */
@@ -309,7 +309,7 @@ export function openApp(app: AppDef): string {
 /** `${appId} ${request}` → screen id, so repeated deep links reuse one screen. */
 const deepLinkIndex = new Map<string, string>();
 
-/** Open a screen in another app via a genos://open deep link. */
+/** Open a screen in another app via an appless://open deep link. */
 export function openDeepLink(appId: string, request: string): string {
   const key = `${appId.toLowerCase()} ${request}`;
   const existing = deepLinkIndex.get(key);
@@ -413,7 +413,7 @@ function maybePrefetch(id: string) {
   const screen = screenStore.get(id);
   if (!screen || screen.status !== "done") return;
 
-  for (const message of extractActions(cleanLang(screen.content)).slice(0, MAX_PREFETCH)) {
+  for (const message of extractActions(cleanLang(screen.content)).slice(0, APPLESS_PREFETCH_LIMIT)) {
     const key = actionKey(id, message);
     if (actionIndex.has(key)) continue;
     const childId = launchScreen({
@@ -426,4 +426,3 @@ function maybePrefetch(id: string) {
     actionIndex.set(key, childId);
   }
 }
-

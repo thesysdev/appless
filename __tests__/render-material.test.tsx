@@ -8,11 +8,11 @@ import React from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 jest.mock("react-native-webview", () => ({ WebView: () => null }));
 // eslint-disable-next-line import/first
-import { buildGenosLibrary } from "../src/genos/ui/contract";
+import { buildApplessLibrary } from "../src/appless/ui/contract";
 // eslint-disable-next-line import/first
-import { materialRenderers } from "../src/genos/ui/material";
+import { materialRenderers } from "../src/appless/ui/material";
 
-const lib = buildGenosLibrary(materialRenderers);
+const lib = buildApplessLibrary(materialRenderers);
 
 const PROGRAM = `root = Card([header, chips, tiles, chart, itin, compose])
 header = CardHeader("Goa Getaway", "JULY 11 - 13, 2026")

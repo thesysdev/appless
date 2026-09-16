@@ -1,5 +1,5 @@
 /**
- * Cupertino (iOS) renderers for the GenOS contract. Render functions only -
+ * Cupertino (iOS) renderers for the AppLess contract. Render functions only -
  * component names, prop schemas and descriptions live in ../contract.tsx.
  */
 import { useTriggerAction } from "@openuidev/react-lang";

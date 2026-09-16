@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const src = process.argv[2] ?? join(root, "../appless-os/src/generated/system-prompt.txt");
-const out = join(root, "src/genos/generated/system-prompt.ts");
+const out = join(root, "src/appless/generated/system-prompt.ts");
 
 if (!existsSync(src)) {
   console.error(

@@ -1,4 +1,4 @@
-import { buildGenosLibrary } from "./ui/contract";
+import { buildApplessLibrary } from "./ui/contract";
 import { cupertinoRenderers } from "./ui/cupertino";
 
 /**
@@ -6,4 +6,4 @@ import { cupertinoRenderers } from "./ui/cupertino";
  * (library.ios.ts / library.android.ts) override this per bundle once more
  * than one design system exists.
  */
-export const genosLibrary = buildGenosLibrary(cupertinoRenderers);
+export const applessLibrary = buildApplessLibrary(cupertinoRenderers);

@@ -20,7 +20,7 @@ export interface SearchResult {
 export const TOOLS_PROMPT_SECTION = `
 
 ## Live Data (web_search tool)
-You have a REAL web_search tool. When a truthful screen needs real-world or current facts - latest news, live prices or scores, current weather, real venues (famous hotels, restaurants, attractions) in real places, current events - call web_search FIRST (1-3 focused queries), then compose the screen strictly from the returned facts: real names, real numbers, real dates. Finish such screens with a small TextContent("Sources: …", "small") footnote naming the source domains. If results are empty or the tool errors, build the screen from what you know and mark it clearly as possibly outdated. NEVER call tools for invented/personal content (messages, notes, playlists, settings, workouts) - invent that as usual.`;
+You have a REAL web_search tool. When a truthful screen needs real-world or current facts - latest news, live prices or scores, current weather, real venues (famous hotels, restaurants, attractions) in real places, current events - you MUST call web_search FIRST (1-3 focused queries) and output no screen or prose in that tool-calling turn. On the next turn, compose the screen strictly from the returned facts: real names, real numbers, real dates. Finish such screens with a small TextContent("Sources: …", "small") footnote naming the source domains. If results are empty or the tool errors, build the screen from what you know and mark it clearly as possibly outdated. NEVER call tools for invented/personal content (messages, notes, playlists, settings, workouts) - invent that as usual.`;
 
 /** OpenAI-format tool definitions sent with each request when available. */
 export const TOOL_DEFS = [

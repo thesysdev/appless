@@ -8,8 +8,8 @@ jest.mock("expo-secure-store", () => ({
 // expo/fetch pulls the winter runtime, which jest-expo's env can't load.
 jest.mock("expo/fetch", () => ({ fetch: jest.fn() }));
 
-import { loremflickrUrl, parseImgUrl } from "../src/genos/tools/images";
-import { executeTool, formatWebResults } from "../src/genos/tools/search";
+import { loremflickrUrl, parseImgUrl } from "../src/appless/tools/images";
+import { executeTool, formatWebResults } from "../src/appless/tools/search";
 
 describe("semantic image queries (/api/img)", () => {
   it("parses the prompt's canonical form", () => {

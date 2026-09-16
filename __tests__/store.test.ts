@@ -12,7 +12,7 @@ jest.mock("expo/fetch", () => ({ fetch: jest.fn() }));
 
 // Capture stream launches instead of hitting Cerebras.
 const streamCalls: Array<{ messages: unknown }> = [];
-jest.mock("../src/genos/stream", () => ({
+jest.mock("../src/appless/stream", () => ({
   NEEDS_LIVE_DATA: "needs live data",
   streamScreen: jest.fn((messages: unknown) => {
     streamCalls.push({ messages });
@@ -26,7 +26,7 @@ import {
   parseOsCommand,
   resolveAction,
   screenStore,
-} from "../src/genos/store";
+} from "../src/appless/store";
 
 describe("cleanLang", () => {
   it("strips a wrapping markdown fence", () => {

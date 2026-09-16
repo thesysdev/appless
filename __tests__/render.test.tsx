@@ -12,7 +12,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 jest.mock("react-native-webview", () => ({ WebView: () => null }));
 
 // eslint-disable-next-line import/first
-import { genosLibrary } from "../src/genos/library";
+import { applessLibrary } from "../src/appless/library";
 
 const SETTINGS_SCREEN = `root = Card([header, connectivity, display])
 header = CardHeader("Settings")
@@ -45,7 +45,7 @@ function renderProgram(program: string): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   act(() => {
     tree = create(
-      <Renderer response={program} library={genosLibrary} isStreaming={false} />,
+      <Renderer response={program} library={applessLibrary} isStreaming={false} />,
     );
   });
   return tree;
@@ -90,7 +90,7 @@ describe("generated screens render with the RN library", () => {
     const partial = DASHBOARD_SCREEN.slice(0, Math.floor(DASHBOARD_SCREEN.length * 0.4));
     let tree!: ReactTestRenderer;
     act(() => {
-      tree = create(<Renderer response={partial} library={genosLibrary} isStreaming />);
+      tree = create(<Renderer response={partial} library={applessLibrary} isStreaming />);
     });
     expect(tree.toJSON()).toBeTruthy();
     act(() => tree.unmount());

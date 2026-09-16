@@ -1,12 +1,10 @@
 /**
- * First-launch gate: applessOS is BYOK - screens generate on the user's own
- * Cerebras key, entered once and stored on-device (SecureStore on iOS/
- * Android, localStorage on web). Shown until a key exists; reappears if the
- * API rejects the stored key.
+ * Authentication for protected model endpoints. Local vLLM servers without
+ * authentication skip this gate; a 401/403 also opens it when a key is needed.
  */
 import React, { useState } from "react";
-import { Linking, Pressable, Text, TextInput, View } from "react-native";
-import { cerebrasKey, type KeyStatus } from "../../config";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { modelKey, type KeyStatus } from "../../config";
 import { useCds } from "../theme";
 
 const ACCENT = "#5e5ce6";
@@ -15,12 +13,12 @@ export function KeyGate({ status }: { status: KeyStatus }) {
   const t = useCds();
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
-  const valid = value.trim().length >= 10;
+  const valid = value.trim().length > 0;
 
   const save = async () => {
     if (!valid || saving) return;
     setSaving(true);
-    await cerebrasKey.set(value);
+    await modelKey.set(value);
   };
 
   return (
@@ -43,20 +41,21 @@ export function KeyGate({ status }: { status: KeyStatus }) {
         AppLess
       </Text>
       <Text style={{ fontSize: 14, color: t.ink2, textAlign: "center", maxWidth: 320 }}>
-        Every screen is generated the moment you ask - on your own Cerebras API key. It is
-        stored only on this device.
+        Enter the access key for your screen generation service. Your key is stored
+        only on this device.
       </Text>
 
       {status === "rejected" && (
         <Text style={{ fontSize: 13, color: t.red, textAlign: "center" }}>
-          Cerebras rejected the saved key - paste a valid one.
+          The service requires a valid access key. Enter one to continue.
         </Text>
       )}
 
       <TextInput
         value={value}
         onChangeText={setValue}
-        placeholder="csk-…"
+        placeholder="Access key"
+        secureTextEntry
         placeholderTextColor={t.ink3}
         autoCapitalize="none"
         autoCorrect={false}
@@ -91,9 +90,6 @@ export function KeyGate({ status }: { status: KeyStatus }) {
         </Text>
       </Pressable>
 
-      <Pressable onPress={() => Linking.openURL("https://cloud.cerebras.ai").catch(() => {})}>
-        <Text style={{ fontSize: 13, color: t.tint }}>Get a free key at cloud.cerebras.ai</Text>
-      </Pressable>
     </View>
   );
 }
