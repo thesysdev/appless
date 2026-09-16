@@ -24,7 +24,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { modelKey } from "../config";
 import type { AppDef } from "./apps";
 import { APPS, DEFAULT_TILE, summonApp } from "./apps";
-import { genosLibrary } from "./library";
+import { applessLibrary } from "./library";
 import { HomeScreen } from "./shell/HomeScreen";
 import { KeyGate } from "./shell/KeyGate";
 import { Switcher, type RunningApp } from "./shell/Switcher";
@@ -60,11 +60,11 @@ type NavDir = "launch" | "push" | "pop";
 const EASE = Easing.bezier(0.22, 1, 0.32, 1);
 
 /**
- * genos:// deep links parsed by hand - Hermes' URL support for custom
- * schemes varies, and the shape is tiny: genos://cmd?key=value&…
+ * appless:// deep links parsed by hand - Hermes' URL support for custom
+ * schemes varies, and the shape is tiny: appless://cmd?key=value&…
  */
-function parseGenosUrl(url: string): { cmd: string; params: Record<string, string> } | null {
-  const m = url.match(/^genos:\/\/([a-z]+)\/?(?:\?(.*))?$/i);
+function parseApplessUrl(url: string): { cmd: string; params: Record<string, string> } | null {
+  const m = url.match(/^appless:\/\/([a-z]+)\/?(?:\?(.*))?$/i);
   if (!m) return null;
   const params: Record<string, string> = {};
   for (const pair of (m[2] ?? "").split("&")) {
@@ -184,7 +184,7 @@ function Skeleton() {
   );
 }
 
-export default function GenOS() {
+export default function AppLess() {
   useSyncExternalStore(screenStore.subscribe, screenStore.getVersion);
   const keyStatus = useSyncExternalStore(modelKey.subscribe, modelKey.getStatus);
 
@@ -369,7 +369,7 @@ export default function GenOS() {
     [activeApp],
   );
 
-  /** genos://open deep link - jump into another app at a specific screen. */
+  /** appless://open deep link - jump into another app at a specific screen. */
   const deepLink = useCallback(
     (appId: string, request: string) => {
       const id = openDeepLink(appId, request);
@@ -418,8 +418,8 @@ export default function GenOS() {
   const handleAction = useCallback(
     (ev: GenActionEvent) => {
       const url = ev.params?.url;
-      if (typeof url === "string" && url.startsWith("genos://")) {
-        const parsed = parseGenosUrl(url);
+      if (typeof url === "string" && url.startsWith("appless://")) {
+        const parsed = parseApplessUrl(url);
         if (parsed) {
           const { cmd, params } = parsed;
           if (cmd === "toast") showToast(params.text || "Done ✓");
@@ -448,7 +448,7 @@ export default function GenOS() {
       // otherwise it happily generates a fake home screen or a stale copy of
       // the previous one. ("Settings home screen" is an app home - not OS home.)
       if (
-        /genos\s*home|all (your |the )?apps|app (list|grid|drawer|launcher)|main menu/i.test(
+        /appless\s*home|all (your |the )?apps|app (list|grid|drawer|launcher)|main menu/i.test(
           message,
         )
       ) {
@@ -636,7 +636,7 @@ export default function GenOS() {
                 {top.content ? (
                   <Renderer
                     response={cleanLang(top.content)}
-                    library={genosLibrary}
+                    library={applessLibrary}
                     isStreaming={generating}
                     onAction={handleAction}
                   />

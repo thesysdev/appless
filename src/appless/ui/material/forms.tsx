@@ -1,4 +1,4 @@
-/** Material 3 form renderers for the GenOS contract. */
+/** Material 3 form renderers for the AppLess contract. */
 import { FormNameContext, useFormName, useTriggerAction } from "@openuidev/react-lang";
 import type { ActionPlan } from "@openuidev/react-lang";
 import RNSlider from "@react-native-community/slider";

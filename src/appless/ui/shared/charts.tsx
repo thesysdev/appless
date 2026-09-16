@@ -6,7 +6,7 @@
 import React, { useState } from "react";
 import { Text as RNText, View } from "react-native";
 import Svg, { Circle, G, Path, Rect, Text as SvgText } from "react-native-svg";
-import type { CartesianChartProps, GenosRenderers, PieChartProps, Renderer } from "../contract";
+import type { CartesianChartProps, ApplessRenderers, PieChartProps, Renderer } from "../contract";
 
 /** The colors a design system supplies to the shared charts. */
 export interface ChartTheme {
@@ -19,7 +19,7 @@ export interface ChartTheme {
 }
 
 export type ChartRenderers = Pick<
-  GenosRenderers,
+  ApplessRenderers,
   "BarChart" | "LineChart" | "AreaChart" | "PieChart" | "HorizontalBarChart"
 >;
 

@@ -79,9 +79,9 @@ Copy `.env.example` to `.env.local` and set the address reachable from your app:
 
 ```bash
 EXPO_PUBLIC_MODEL_BASE_URL=http://192.168.1.100:8000/v1
-EXPO_PUBLIC_GENOS_MODEL=OUI-1
-EXPO_PUBLIC_GENOS_MAX_TOKENS=4096
-EXPO_PUBLIC_GENOS_PREFETCH_CONCURRENCY=1
+EXPO_PUBLIC_APPLESS_MODEL=OUI-1
+EXPO_PUBLIC_APPLESS_MAX_TOKENS=4096
+EXPO_PUBLIC_APPLESS_PREFETCH_LIMIT=1
 # EXPO_PUBLIC_EXA_API_KEY=             # enable web_search (Exa)
 # EXPO_PUBLIC_UNSPLASH_ACCESS_KEY=     # semantic photos (else LoremFlickr)
 ```
@@ -104,8 +104,10 @@ values are included in the app bundle. Remote deployments should put vLLM behind
 authenticated HTTPS access; see [vLLM security](https://docs.vllm.ai/en/latest/usage/security/).
 
 OUI-1 streams committed 256-token blocks. It ignores request temperature and seed,
-so the client sends neither. Set prefetch concurrency to `0` to disable it, or
-`1`–`6` to control background generation; user requests pause competing prefetches.
+so the client sends neither. The original prefetch logic generates likely next
+screens ahead of a tap. `EXPO_PUBLIC_APPLESS_PREFETCH_LIMIT` controls how many
+destinations to generate per screen: `1` by default, `0` to disable, up to `6`.
+This is optional and trades extra model requests for faster navigation.
 If the server rejects the context length, the app retries after dropping the
 oldest complete ancestor exchange, preserving the current request and tool
 results. If those alone exceed the limit, it reports an actionable error.
@@ -169,13 +171,13 @@ own Exa key.
 The model-facing contract and the design languages are deliberately separate so
 platforms can look native without ever drifting the prompt:
 
-- [`ui/contract.tsx`](src/genos/ui/contract.tsx) - component names, prop schemas,
+- [`ui/contract.tsx`](src/appless/ui/contract.tsx) - component names, prop schemas,
   and descriptions. The single source that generates the system prompt.
-- [`ui/cupertino/`](src/genos/ui/cupertino) - iOS renderers: inset grouped
+- [`ui/cupertino/`](src/appless/ui/cupertino) - iOS renderers: inset grouped
   lists, icon badges, segmented tabs, iOS switch.
-- [`ui/material/`](src/genos/ui/material) - Android renderers: Material 3 tonal
+- [`ui/material/`](src/appless/ui/material) - Android renderers: Material 3 tonal
   surfaces, ripple, filter chips, underline tabs, native switch.
-- [`ui/shared/`](src/genos/ui/shared) - chart, map, form, and image logic shared
+- [`ui/shared/`](src/appless/ui/shared) - chart, map, form, and image logic shared
   by every design system.
 
 ## Tests
@@ -186,12 +188,10 @@ npm test    # renders exemplar generated screens through the full
             # headless), for both Cupertino and Material renderer sets
 ```
 
-The suite also checks anonymous/authenticated requests, streamed blocks and tool
-calls, context overflow recovery, and foreground priority over prefetch. Network
-calls are mocked. For a live check, start vLLM and the app, open a screen, tap a
-detail row, submit a form, and (with an Exa key) request current weather. Confirm
-that the tool result becomes the next screen and that navigating away pauses
-background generation.
+For a live check, start vLLM and the app, open a screen, tap a detail row, submit
+a form, and (with an Exa key) request current weather. Confirm that the tool
+result becomes the next screen. Set the prefetch limit to `0` to check generation
+only when the user requests a screen.
 
 ## Fork it and make it yours
 

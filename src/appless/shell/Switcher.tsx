@@ -2,7 +2,7 @@ import { Renderer } from "@openuidev/react-lang";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { genosLibrary } from "../library";
+import { applessLibrary } from "../library";
 import { cleanLang, screenStore } from "../store";
 import { useCds } from "../theme";
 
@@ -129,7 +129,7 @@ export function Switcher({
                   >
                     <Renderer
                       response={cleanLang(screen.content)}
-                      library={genosLibrary}
+                      library={applessLibrary}
                       isStreaming={false}
                     />
                   </View>

@@ -1,5 +1,5 @@
 /**
- * The GenOS component CONTRACT - the single model-facing surface.
+ * The AppLess component CONTRACT - the single model-facing surface.
  *
  * Everything the LLM knows about the component library lives here: names,
  * positional prop schemas and descriptions. They mirror the surface that
@@ -9,7 +9,7 @@
  * Material on Android, Liquid Glass later) only decide how each component
  * LOOKS, never what it IS.
  *
- * buildGenosLibrary() must be called exactly once per bundle: defineComponent
+ * buildApplessLibrary() must be called exactly once per bundle: defineComponent
  * registers each schema in zod's global registry by name, and duplicate ids
  * crash JSON-schema conversion. Metro's platform file resolution guarantees
  * this (one library.<platform>.ts per build).
@@ -188,7 +188,7 @@ export type Renderer<P> = (renderProps: {
  * structural placeholders (consumed by their parents) and render nothing in
  * every design system, so they are not part of the renderer set.
  */
-export interface GenosRenderers {
+export interface ApplessRenderers {
   Card: Renderer<CardProps>;
   CardHeader: Renderer<CardHeaderProps>;
   TextContent: Renderer<TextContentProps>;
@@ -221,8 +221,8 @@ export interface GenosRenderers {
   Button: Renderer<ButtonProps>;
 }
 
-/** Compose the full GenOS library from one design system's renderers. */
-export function buildGenosLibrary(renderers: GenosRenderers): Library {
+/** Compose the full AppLess library from one design system's renderers. */
+export function buildApplessLibrary(renderers: ApplessRenderers): Library {
   // defineComponent ties the renderer's prop type to z.infer of the schema;
   // our contract interfaces are hand-written equivalents, so bridge the two.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

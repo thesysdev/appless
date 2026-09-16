@@ -10,7 +10,7 @@ export const MODEL_BASE_URL: string = (
   process.env.EXPO_PUBLIC_MODEL_BASE_URL?.trim() ||
   (Platform.OS === "android" ? "http://10.0.2.2:8000/v1" : "http://localhost:8000/v1")
 ).replace(/\/+$/, "");
-export const GENOS_MODEL = process.env.EXPO_PUBLIC_GENOS_MODEL?.trim() || "OUI-1";
+export const APPLESS_MODEL = process.env.EXPO_PUBLIC_APPLESS_MODEL?.trim() || "OUI-1";
 export const MODEL_AUTH_REQUIRED = process.env.EXPO_PUBLIC_MODEL_AUTH_REQUIRED === "1";
 
 function integerSetting(value: string | undefined, fallback: number, min: number, max: number) {
@@ -18,10 +18,10 @@ function integerSetting(value: string | undefined, fallback: number, min: number
   return Number.isInteger(n) && n >= min && n <= max ? n : fallback;
 }
 
-export const GENOS_MAX_TOKENS = integerSetting(process.env.EXPO_PUBLIC_GENOS_MAX_TOKENS, 4096, 1, 16384);
-/** Zero disables prefetch; foreground requests always take priority. */
-export const PREFETCH_CONCURRENCY = integerSetting(
-  process.env.EXPO_PUBLIC_GENOS_PREFETCH_CONCURRENCY, 1, 0, 6,
+export const APPLESS_MAX_TOKENS = integerSetting(process.env.EXPO_PUBLIC_APPLESS_MAX_TOKENS, 4096, 1, 16384);
+/** Number of predicted destinations to generate per screen; zero disables it. */
+export const APPLESS_PREFETCH_LIMIT = integerSetting(
+  process.env.EXPO_PUBLIC_APPLESS_PREFETCH_LIMIT, 1, 0, 6,
 );
 
 /** Optional tool keys - features degrade gracefully when absent. */
@@ -30,7 +30,7 @@ export const EXA_API_KEY = process.env.EXPO_PUBLIC_EXA_API_KEY;
 
 // SecureStore keys allow only alphanumerics, '.', '-' and '_'. Scope saved
 // credentials to the endpoint so switching servers never reuses another key.
-const STORAGE_KEY = `genos.model-key.${Array.from(MODEL_BASE_URL, (c) => c.codePointAt(0)!.toString(16)).join("-")}`;
+const STORAGE_KEY = `appless.model-key.${Array.from(MODEL_BASE_URL, (c) => c.codePointAt(0)!.toString(16)).join("-")}`;
 const ENV_KEY = process.env.EXPO_PUBLIC_MODEL_API_KEY;
 
 async function persistedRead(): Promise<string | null> {

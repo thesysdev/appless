@@ -7,7 +7,7 @@
  */
 
 import { fetch as expoFetch } from "expo/fetch";
-import { MODEL_BASE_URL, GENOS_MODEL, GENOS_MAX_TOKENS, modelKey } from "../config";
+import { MODEL_BASE_URL, APPLESS_MODEL, APPLESS_MAX_TOKENS, modelKey } from "../config";
 import { SYSTEM_PROMPT } from "./generated/system-prompt";
 import { TOOLS_PROMPT_SECTION, TOOL_DEFS, executeTool, toolsAvailable } from "./tools/search";
 
@@ -150,12 +150,12 @@ async function streamRound(
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify({
-        model: GENOS_MODEL,
+        model: APPLESS_MODEL,
         messages: [{ role: "system", content: systemPrompt(includeTools) }, ...convo],
         ...(includeTools ? { tools: TOOL_DEFS, tool_choice: "auto" } : {}),
         stream: true,
         // OUI-1 uses the checkpoint's diffusion sampler; temperature is ignored.
-        max_tokens: GENOS_MAX_TOKENS,
+        max_tokens: APPLESS_MAX_TOKENS,
       }),
       signal,
     });
@@ -175,7 +175,7 @@ async function streamRound(
         convo.splice(0, nextUser);
         continue;
       }
-      throw new Error("The request exceeds the model context. Shorten it, lower EXPO_PUBLIC_GENOS_MAX_TOKENS, or increase vLLM --max-model-len.");
+      throw new Error("The request exceeds the model context. Shorten it, lower EXPO_PUBLIC_APPLESS_MAX_TOKENS, or increase vLLM --max-model-len.");
     }
     throw new Error(detail.slice(0, 500) || `Model server HTTP ${res.status}`);
   }

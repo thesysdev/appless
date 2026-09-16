@@ -1,5 +1,5 @@
 /**
- * Cupertino + shell design tokens - the RN port of cupertino.css / genos.css
+ * Cupertino + shell design tokens - the RN port of cupertino.css / appless.css
  * custom properties. Light/dark follows the OS via useColorScheme().
  */
 import { useColorScheme } from "react-native";

@@ -1,8 +1,8 @@
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import GenOS from "./src/genos/GenOS";
-import { initTelemetry } from "./src/genos/telemetry";
+import AppLess from "./src/appless/appless";
+import { initTelemetry } from "./src/appless/telemetry";
 
 export default function App() {
   useEffect(() => {
@@ -12,7 +12,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="auto" />
-      <GenOS />
+      <AppLess />
     </SafeAreaProvider>
   );
 }

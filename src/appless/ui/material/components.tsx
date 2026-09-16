@@ -1,5 +1,5 @@
 /**
- * Material 3 renderers for the GenOS contract - the Android counterpart to the
+ * Material 3 renderers for the AppLess contract - the Android counterpart to the
  * Cupertino set. Component names and schemas live in ../contract.tsx.
  */
 import { useTriggerAction } from "@openuidev/react-lang";
