@@ -2,6 +2,7 @@ import type { AppDef } from "./apps";
 import { APPS } from "./apps";
 import type { ChatMessage } from "./stream";
 import { streamScreen } from "./stream";
+import { PREFETCH_CONCURRENCY } from "../config";
 
 export type ScreenStatus = "pending" | "streaming" | "done" | "error";
 
@@ -43,8 +44,8 @@ export function parseOsCommand(text: string): Screen["osCommand"] | undefined {
 
 // Store
 /**
- * Coalesce streaming re-renders. The provider streams at ~1850 tok/s - a delta
- * every fraction of a millisecond. Re-parsing and re-rendering the whole native
+ * Coalesce streaming re-renders, including bursts of OUI-1 diffusion blocks.
+ * Re-parsing and re-rendering the whole native
  * component tree (SVG icons, images, charts) on every tiny delta produces a
  * render storm that, on React Native's reconciler, can race native layout/image
  * callbacks into a setState loop ("Maximum update depth exceeded"). Buffering
@@ -140,6 +141,38 @@ const actionIndex = new Map<string, string>();
 const appHomeIndex = new Map<string, string>();
 /** screen id → controller for its in-flight generation. */
 const inflight = new Map<string, AbortController>();
+const prefetchQueue = new Set<string>();
+let prefetchScheduled = false;
+
+/** Yield until current navigation finishes before spending GPU time on guesses. */
+function schedulePrefetch() {
+  if (prefetchScheduled || PREFETCH_CONCURRENCY === 0) return;
+  prefetchScheduled = true;
+  Promise.resolve().then(() => {
+    prefetchScheduled = false;
+    if ([...inflight.keys()].some((id) => !screenStore.get(id)?.speculative)) return;
+    for (const id of prefetchQueue) {
+      if (inflight.size >= PREFETCH_CONCURRENCY) break;
+      prefetchQueue.delete(id);
+      const screen = screenStore.get(id);
+      if (screen?.speculative && screen.status === "pending" && screen.parentId === activeScreenId) {
+        startStream(id);
+      }
+    }
+  });
+}
+
+/** Pause competing speculative streams. A later tap can restart the same id. */
+function pausePrefetch(keepId?: string) {
+  for (const [id, controller] of inflight) {
+    const screen = screenStore.get(id);
+    if (id === keepId || !screen?.speculative) continue;
+    inflight.delete(id);
+    controller.abort();
+    screenStore.patch(id, { content: "", status: "pending", searching: false });
+    if (screen.parentId === activeScreenId) prefetchQueue.add(id);
+  }
+}
 
 const actionKey = (parentId: string, message: string) => `${parentId} ${message}`;
 
@@ -195,7 +228,10 @@ function buildMessages(screen: Screen): ChatMessage[] {
 function startStream(id: string) {
   const screen = screenStore.get(id);
   if (!screen) return;
+  if (!screen.speculative) pausePrefetch(id);
+  prefetchQueue.delete(id);
   inflight.get(id)?.abort();
+  screenStore.patch(id, { startedAt: performance.now() });
   const controller = new AbortController();
   inflight.set(id, controller);
 
@@ -221,6 +257,7 @@ function startStream(id: string) {
     onDone: (info) => {
       if (stale()) return;
       inflight.delete(id);
+      schedulePrefetch();
       const s = screenStore.get(id);
       if (info.dropped) {
         // The stream died mid-flight - a partial screen looks complete but
@@ -247,6 +284,7 @@ function startStream(id: string) {
       if (stale()) return;
       inflight.delete(id);
       screenStore.patch(id, { status: "error", error: err.message, searching: false });
+      schedulePrefetch();
     },
   });
 }
@@ -268,7 +306,12 @@ function launchScreen(input: LaunchInput): string {
     status: "pending",
     startedAt: performance.now(),
   });
-  startStream(id);
+  if (input.speculative) {
+    prefetchQueue.add(id);
+    schedulePrefetch();
+  } else {
+    startStream(id);
+  }
   return id;
 }
 
@@ -355,6 +398,9 @@ export function resolveAction(
           speculative: false,
           prefetched: hitScreen.speculative && hitScreen.status === "done",
         });
+        prefetchQueue.delete(hit);
+        pausePrefetch(hit);
+        if (hitScreen.status === "pending" && !inflight.has(hit)) startStream(hit);
         return hit;
       }
       if (hitScreen) {
@@ -394,6 +440,7 @@ export function retryScreen(id: string) {
     // tools for prefetched screens that errored with NEEDS_LIVE_DATA.
     speculative: false,
     searching: false,
+    osCommand: undefined,
   });
   startStream(id);
 }
@@ -404,18 +451,30 @@ export function retryScreen(id: string) {
  * or (b) finishes generating while visible.
  */
 export function setActiveScreen(id: string | null) {
+  if (activeScreenId !== id) {
+    // Keep a speculative stream that was just promoted by resolveAction.
+    pausePrefetch(id ?? undefined);
+    prefetchQueue.clear();
+  }
   activeScreenId = id;
   if (id && screenStore.get(id)?.status === "done") maybePrefetch(id);
 }
 
 function maybePrefetch(id: string) {
-  if (activeScreenId !== id) return;
+  if (activeScreenId !== id || PREFETCH_CONCURRENCY === 0) return;
   const screen = screenStore.get(id);
-  if (!screen || screen.status !== "done") return;
+  if (!screen || screen.status !== "done" || screen.osCommand) return;
 
   for (const message of extractActions(cleanLang(screen.content)).slice(0, MAX_PREFETCH)) {
     const key = actionKey(id, message);
-    if (actionIndex.has(key)) continue;
+    const existing = actionIndex.get(key);
+    if (existing) {
+      const cached = screenStore.get(existing);
+      if (cached?.speculative && cached.status === "pending" && !inflight.has(existing)) {
+        prefetchQueue.add(existing);
+      }
+      continue;
+    }
     const childId = launchScreen({
       appId: screen.appId,
       appName: screen.appName,
@@ -425,5 +484,5 @@ function maybePrefetch(id: string) {
     });
     actionIndex.set(key, childId);
   }
+  schedulePrefetch();
 }
-

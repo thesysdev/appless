@@ -1,15 +1,13 @@
 /**
- * Direct Cerebras streaming (OpenAI-compatible chat completions) with a real
+ * Direct OUI-1/vLLM streaming (OpenAI-compatible chat completions) with a real
  * tool-calling loop: rounds that finish in tool_calls execute the tools
  * (web_search) and feed results back as `tool` messages until the model
- * streams the screen itself. There is no server - the app prepends the
- * generated system prompt and holds the conversation. Cerebras allows
- * browser origins (Access-Control-Allow-Origin: *), so this same path
- * serves native and web builds.
+ * streams the screen itself. The app prepends the generated system prompt
+ * and holds the conversation; vLLM runs separately on the GPU host.
  */
 
 import { fetch as expoFetch } from "expo/fetch";
-import { CEREBRAS_BASE_URL, GENOS_MODEL, cerebrasKey } from "../config";
+import { MODEL_BASE_URL, GENOS_MODEL, GENOS_MAX_TOKENS, modelKey } from "../config";
 import { SYSTEM_PROMPT } from "./generated/system-prompt";
 import { TOOLS_PROMPT_SECTION, TOOL_DEFS, executeTool, toolsAvailable } from "./tools/search";
 
@@ -106,7 +104,7 @@ function createUtf8Decoder(): (chunk: Uint8Array) => string {
 }
 
 /** System prompt + optional tools section + today's date line. */
-function systemPrompt(): string {
+function systemPrompt(includeTools: boolean): string {
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -114,7 +112,7 @@ function systemPrompt(): string {
     day: "numeric",
   });
   return (
-    SYSTEM_PROMPT + (toolsAvailable() ? TOOLS_PROMPT_SECTION : "") + `\n\nToday is ${today}.`
+    SYSTEM_PROMPT + (includeTools ? TOOLS_PROMPT_SECTION : "") + `\n\nToday is ${today}.`
   );
 }
 
@@ -127,8 +125,8 @@ interface RoundResult {
 
 /**
  * One streamed completion. Content deltas are forwarded live; tool-call
- * deltas are accumulated by index (Cerebras sends whole calls per chunk, but
- * the accumulator also handles OpenAI-style split `arguments` fragments).
+ * deltas are accumulated by index, including split `arguments` fragments.
+ * OUI-1 delivers committed diffusion blocks; they are still append-only text.
  */
 async function streamRound(
   convo: ChatMessage[],
@@ -136,32 +134,50 @@ async function streamRound(
   onDelta: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<RoundResult> {
-  const apiKey = cerebrasKey.get();
-  if (!apiKey) throw new Error("No Cerebras API key set");
-
-  const res = await expoFetch(`${CEREBRAS_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: GENOS_MODEL,
-      messages: [{ role: "system", content: systemPrompt() }, ...convo],
-      ...(includeTools ? { tools: TOOL_DEFS } : {}),
-      stream: true,
-      temperature: 0.8,
-      max_completion_tokens: 3072,
-    }),
-    signal,
-  });
-  if (res.status === 401 || res.status === 403) {
-    cerebrasKey.markRejected(apiKey);
-    throw new Error("Cerebras rejected the API key - enter a valid key");
+  await modelKey.ready;
+  if (signal?.aborted) throw new Error("Generation aborted");
+  const apiKey = modelKey.get();
+  if (!apiKey && (modelKey.getStatus() === "missing" || modelKey.getStatus() === "rejected")) {
+    throw new Error("Enter an access key for the model server");
   }
-  if (!res.ok || !res.body) {
+
+  let res;
+  for (;;) {
+    res = await expoFetch(`${MODEL_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model: GENOS_MODEL,
+        messages: [{ role: "system", content: systemPrompt(includeTools) }, ...convo],
+        ...(includeTools ? { tools: TOOL_DEFS, tool_choice: "auto" } : {}),
+        stream: true,
+        // OUI-1 uses the checkpoint's diffusion sampler; temperature is ignored.
+        max_tokens: GENOS_MAX_TOKENS,
+      }),
+      signal,
+    });
+    if (res.status === 401 || res.status === 403) {
+      modelKey.markRejected(apiKey);
+      throw new Error("The model server requires a valid access key");
+    }
+    if (res.ok && res.body) break;
+
     const detail = await res.text().catch(() => "");
-    throw new Error(detail.slice(0, 500) || `HTTP ${res.status}`);
+    if (res.status === 400 && /context (length|window)|maximum model length|max_model_len/i.test(detail)) {
+      // Let the server's actual tokenizer enforce prompt + output limits.
+      // Remove only complete ancestor exchanges, never the current request
+      // or its tool calls/results. This also handles context growth in tool rounds.
+      const nextUser = convo.findIndex((m, i) => i > 0 && m.role === "user");
+      if (nextUser > 0) {
+        convo.splice(0, nextUser);
+        continue;
+      }
+      throw new Error("The request exceeds the model context. Shorten it, lower EXPO_PUBLIC_GENOS_MAX_TOKENS, or increase vLLM --max-model-len.");
+    }
+    throw new Error(detail.slice(0, 500) || `Model server HTTP ${res.status}`);
   }
 
   const reader = res.body.getReader();
@@ -172,72 +188,79 @@ async function streamRound(
   let content = "";
   const toolCalls = new Map<number, ToolCall>();
 
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decode(value);
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (!done) buffer += decode(value);
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      // Some servers close immediately after the final event without a newline.
+      if (done && buffer) lines.push(buffer);
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-      const payload = trimmed.slice(5).trim();
-      if (!payload) continue;
-      if (payload === "[DONE]") {
-        sawDone = true;
-        continue;
-      }
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const payload = trimmed.slice(5).trim();
+        if (!payload) continue;
+        if (payload === "[DONE]") {
+          sawDone = true;
+          continue;
+        }
 
-      let chunk: {
-        error?: { message?: string } | string;
-        choices?: Array<{
-          delta?: {
-            content?: string;
-            tool_calls?: Array<{
-              index?: number;
-              id?: string;
-              function?: { name?: string; arguments?: string };
-            }>;
-          };
-          finish_reason?: string | null;
-        }>;
-      };
-      try {
-        chunk = JSON.parse(payload);
-      } catch {
-        continue;
-      }
-      if (chunk.error) {
-        const msg = typeof chunk.error === "string" ? chunk.error : chunk.error.message;
-        throw new Error(msg || "stream error");
-      }
-      const choice = chunk.choices?.[0];
-      if (choice?.finish_reason) finishReason = choice.finish_reason;
-      const delta = choice?.delta;
-      if (delta?.content) {
-        content += delta.content;
-        onDelta(delta.content);
-      }
-      for (const tc of delta?.tool_calls ?? []) {
-        const idx = tc.index ?? 0;
-        const cur = toolCalls.get(idx) ?? {
-          id: "",
-          type: "function" as const,
-          function: { name: "", arguments: "" },
+        let chunk: {
+          error?: { message?: string } | string;
+          choices?: Array<{
+            delta?: {
+              content?: string;
+              tool_calls?: Array<{
+                index?: number;
+                id?: string;
+                function?: { name?: string; arguments?: string };
+              }>;
+            };
+            finish_reason?: string | null;
+          }>;
         };
-        if (tc.id) cur.id = tc.id;
-        if (tc.function?.name) cur.function.name = tc.function.name;
-        if (tc.function?.arguments) cur.function.arguments += tc.function.arguments;
-        toolCalls.set(idx, cur);
+        try {
+          chunk = JSON.parse(payload);
+        } catch {
+          continue;
+        }
+        if (chunk.error) {
+          const msg = typeof chunk.error === "string" ? chunk.error : chunk.error.message;
+          throw new Error(msg || "stream error");
+        }
+        const choice = chunk.choices?.[0];
+        if (choice?.finish_reason) finishReason = choice.finish_reason;
+        const delta = choice?.delta;
+        if (delta?.content) {
+          content += delta.content;
+          onDelta(delta.content);
+        }
+        for (const tc of delta?.tool_calls ?? []) {
+          const idx = tc.index ?? 0;
+          const cur = toolCalls.get(idx) ?? {
+            id: "",
+            type: "function" as const,
+            function: { name: "", arguments: "" },
+          };
+          if (tc.id) cur.id = tc.id;
+          if (tc.function?.name) cur.function.name = tc.function.name;
+          if (tc.function?.arguments) cur.function.arguments += tc.function.arguments;
+          toolCalls.set(idx, cur);
+        }
       }
+      if (done) break;
     }
+  } finally {
+    reader.releaseLock();
   }
 
   const dropped = !sawDone && !finishReason;
   if (dropped && !content && toolCalls.size === 0) {
     throw new Error("stream dropped before any content arrived");
   }
+  if (!content && toolCalls.size === 0) throw new Error("The model returned no screen content - retry");
   return {
     finish: finishReason === "tool_calls" && toolCalls.size > 0 ? "tool_calls" : "content",
     content,
