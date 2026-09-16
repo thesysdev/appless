@@ -10,7 +10,7 @@ jest.mock("expo-secure-store", () => ({
 }));
 jest.mock("expo/fetch", () => ({ fetch: jest.fn() }));
 
-// Capture stream launches instead of hitting the model server.
+// Capture stream launches instead of hitting Cerebras.
 const streamCalls: Array<{ messages: unknown }> = [];
 jest.mock("../src/genos/stream", () => ({
   NEEDS_LIVE_DATA: "needs live data",

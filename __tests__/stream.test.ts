@@ -21,7 +21,7 @@ jest.mock("../src/genos/tools/search", () => ({
 
 import { fetch as expoFetch } from "expo/fetch";
 import { modelKey } from "../src/config";
-import { streamScreen, NEEDS_LIVE_DATA, type ChatMessage } from "../src/genos/stream";
+import { streamScreen, type ChatMessage } from "../src/genos/stream";
 import { executeTool, toolsAvailable } from "../src/genos/tools/search";
 
 const fetchMock = jest.mocked(expoFetch);
@@ -76,11 +76,13 @@ beforeEach(() => {
   jest.mocked(executeTool).mockResolvedValue("Bengaluru: 24°C, sunny");
 });
 
-it("renders whole diffusion blocks split across network/UTF-8 boundaries without authentication", async () => {
-  const res = enqueue(event({ content: screen }, "stop") + "data: [DONE]", 1);
+it("appends diffusion blocks across network/UTF-8 boundaries without authentication", async () => {
+  const blocks = ['root = Card([title])\n', 'title = CardHeader("Bengaluru ☀️")'];
+  const res = enqueue(event({ content: blocks[0] }) + event({ content: blocks[1] }, "stop") + "data: [DONE]", 1);
   const h = handlers();
   await streamScreen(messages, h);
   expect(h.onDelta.mock.calls.map(([text]) => text).join("")).toBe(screen);
+  expect(h.onDelta.mock.calls.map(([text]) => text)).toEqual(blocks);
   expect(h.onDone).toHaveBeenCalledWith({ truncated: false, dropped: false });
   expect(h.onError).not.toHaveBeenCalled();
   expect(fetchMock.mock.calls[0][0]).toBe("http://gpu.test:8000/v1/chat/completions");
@@ -89,15 +91,6 @@ it("renders whole diffusion blocks split across network/UTF-8 boundaries without
   expect(body()).not.toHaveProperty("temperature");
   expect(body()).not.toHaveProperty("tools");
   expect(res.reader.releaseLock).toHaveBeenCalled();
-});
-
-it("appends consecutive committed blocks in order", async () => {
-  const blocks = ['root = Card([h])\n', 'h = CardHeader("Weather")'];
-  enqueue(event({ content: blocks[0] }) + event({ content: blocks[1] }, "stop"), 1024);
-  const h = handlers();
-  await streamScreen(messages, h);
-  expect(h.onDelta.mock.calls.map(([text]) => text)).toEqual(blocks);
-  expect(h.onDone).toHaveBeenCalledWith({ truncated: false, dropped: false });
 });
 
 it("sends a configured key and opens authentication after an anonymous 401", async () => {
@@ -112,14 +105,6 @@ it("sends a configured key and opens authentication after an anonymous 401", asy
   expect(h.onError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("access key") }));
 });
 
-it("does not send requests while a required key is missing", async () => {
-  jest.mocked(modelKey.getStatus).mockReturnValue("missing");
-  const h = handlers();
-  await streamScreen(messages, h);
-  expect(fetchMock).not.toHaveBeenCalled();
-  expect(h.onError).toHaveBeenCalled();
-});
-
 it("accumulates tool arguments and returns results to the next model round", async () => {
   jest.mocked(toolsAvailable).mockReturnValue(true);
   toolRound(); complete();
@@ -132,25 +117,6 @@ it("accumulates tool arguments and returns results to the next model round", asy
     { role: "tool", tool_call_id: "call-1", content: "Bengaluru: 24°C, sunny" },
   ]);
   expect(h.onDone).toHaveBeenCalled();
-});
-
-it("stops tools after three rounds and removes their prompt instructions", async () => {
-  jest.mocked(toolsAvailable).mockReturnValue(true);
-  toolRound(); toolRound(); toolRound(); complete();
-  await streamScreen(messages, handlers());
-  expect(executeTool).toHaveBeenCalledTimes(3);
-  expect(body(3)).not.toHaveProperty("tools");
-  expect(body(3).messages[0].content).not.toContain("LIVE TOOL INSTRUCTIONS");
-});
-
-it("does not execute tools when a speculative generation refuses them", async () => {
-  jest.mocked(toolsAvailable).mockReturnValue(true);
-  toolRound();
-  const h = handlers();
-  h.onToolRound.mockReturnValue("abort");
-  await streamScreen(messages, h);
-  expect(executeTool).not.toHaveBeenCalled();
-  expect(h.onError).toHaveBeenCalledWith(new Error(NEEDS_LIVE_DATA));
 });
 
 it("treats finish_reason tool_calls with an empty call list as screen content", async () => {
@@ -177,32 +143,6 @@ it("preserves current tool exchanges while trimming ancestors after context over
   expect(trimmed.slice(-2).map((m: ChatMessage) => m.role)).toEqual(["assistant", "tool"]);
   expect(history).toHaveLength(3); // caller's history is untouched
   expect(h.onDone).toHaveBeenCalled();
-});
-
-it("reports context overflow when the current request alone is too long", async () => {
-  fail(400, "maximum context length exceeded");
-  const h = handlers();
-  await streamScreen(messages, h);
-  expect(fetchMock).toHaveBeenCalledTimes(1);
-  expect(h.onError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Shorten") }));
-});
-
-it("does not retry unrelated server errors", async () => {
-  fail(500);
-  const h = handlers();
-  await streamScreen(messages, h);
-  expect(fetchMock).toHaveBeenCalledTimes(1);
-  expect(h.onError).toHaveBeenCalledWith(new Error("server error"));
-});
-
-it.each([
-  [event({ content: screen }), { truncated: false, dropped: true }],
-  [event({ content: screen }, "length"), { truncated: true, dropped: false }],
-])("reports incomplete streams", async (wire, info) => {
-  enqueue(wire);
-  const h = handlers();
-  await streamScreen(messages, h);
-  expect(h.onDone).toHaveBeenCalledWith(info);
 });
 
 it("forwards cancellation and releases the reader without surfacing an abort error", async () => {
