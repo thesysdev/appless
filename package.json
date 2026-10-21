@@ -6,7 +6,7 @@
     "@expo/metro-runtime": "~6.1.2",
     "@openuidev/react-lang": "0.1.5",
     "@react-native-community/slider": "5.0.1",
-    "expo": "^54.0.0",
+    "expo": "^54.0.37",
     "expo-linear-gradient": "~15.0.8",
     "expo-secure-store": "~15.0.8",
     "expo-status-bar": "~3.0.9",
@@ -28,7 +28,7 @@
     "@types/react": "~19.1.10",
     "@types/react-test-renderer": "^19.1.0",
     "jest": "^29.7.0",
-    "jest-expo": "~54.0.17",
+    "jest-expo": "~54.0.18",
     "react-test-renderer": "19.1.0",
     "typescript": "~5.9.2"
   },
@@ -52,5 +52,29 @@
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|lucide-react-native|@openuidev/.*))"
     ]
+  },
+  "overrides": {
+    "@expo/metro-config": {
+      "postcss": "8.5.31"
+    },
+    "xcode": {
+      "uuid": "11.1.1"
+    },
+    "@expo/metro@54.2.0": {
+      "metro": "0.83.8",
+      "metro-core": "0.83.8",
+      "metro-cache": "0.83.8",
+      "metro-config": "0.83.8",
+      "metro-runtime": "0.83.8",
+      "metro-file-map": "0.83.8",
+      "metro-resolver": "0.83.8",
+      "metro-cache-key": "0.83.8",
+      "metro-source-map": "0.83.8",
+      "metro-symbolicate": "0.83.8",
+      "metro-minify-terser": "0.83.8",
+      "metro-transform-worker": "0.83.8",
+      "metro-babel-transformer": "0.83.8",
+      "metro-transform-plugins": "0.83.8"
+    }
   }
 }
